@@ -1,5 +1,3 @@
-import React from 'react';
-
 const StatCard = ({ icon: Icon, label, value, variant = 'default', onClick }) => {
   const variants = {
     default: 'bg-white/70 backdrop-blur-sm border border-slate-200/50',
