@@ -1,7 +1,6 @@
-import React from 'react';
 import { X } from 'lucide-react';
 
-const Sidebar = ({ apps, activeApp, setActiveApp, sidebarOpen, setSidebarOpen, isDesktop }) => {
+const Sidebar = ({ apps, activeApp, setActiveApp, setSidebarOpen }) => {
   return (
     <>
       <div className="p-5 border-b border-slate-200/50 flex justify-between items-center">

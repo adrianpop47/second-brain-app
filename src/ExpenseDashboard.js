@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Wallet, CheckSquare, Target, Bot, Plus, TrendingUp, TrendingDown, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StatCard from './components/StatCard';
