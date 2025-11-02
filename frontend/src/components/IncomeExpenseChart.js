@@ -1,3 +1,4 @@
+import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const IncomeExpenseChart = ({ data }) => {
@@ -35,6 +36,16 @@ const IncomeExpenseChart = ({ data }) => {
           />
         </LineChart>
       </ResponsiveContainer>
+      <div className="flex items-center justify-center gap-6 mt-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-0.5 bg-emerald-500"></div>
+          <span className="text-xs text-slate-600 font-medium">Income</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-0.5 bg-red-500"></div>
+          <span className="text-xs text-slate-600 font-medium">Expenses</span>
+        </div>
+      </div>
     </div>
   );
 };
