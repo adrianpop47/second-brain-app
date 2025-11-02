@@ -1,0 +1,50 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  test:
+    name: Backend CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build backend Docker image
+        run: docker build -t second-brain-backend:ci ./backend
+
+      - name: Run backend container
+        run: |
+          docker run -d -p 5000:5000 --name backend second-brain-backend:ci
+          echo "Waiting for backend to start..."
+          for i in {1..10}; do
+            if curl -s http://localhost:5000/api/health > /dev/null; then
+              echo "Backend is up!"
+              break
+            fi
+            echo "Waiting..."
+            sleep 2
+          done
+
+      - name: Run API tests
+        env:
+          API_URL: http://localhost:5000/api
+        run: |
+          pip install requests
+          python backend/tests/test_api.py
+
+      - name: Stop backend container
+        if: always()
+        run: docker stop backend
+

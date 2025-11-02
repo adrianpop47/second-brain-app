@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Wallet, CheckSquare, Target, Bot, Plus, TrendingUp, TrendingDown, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StatCard from './components/StatCard';
@@ -7,20 +7,12 @@ import IncomeExpenseChart from './components/IncomeExpenseChart';
 import TransactionList from './components/TransactionList';
 import AddTransactionModal from './components/AddTransactionModal';
 import PeriodSelector from './components/PeriodSelector';
+import apiService from './services/apiService';
 
 const ExpenseDashboard = () => {
   const [activeApp, setActiveApp] = useState('expenses');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [transactions, setTransactions] = useState([
-    { id: 1, type: 'expense', amount: 45.50, category: 'Food', description: 'Grocery shopping', date: '2025-10-25' },
-    { id: 2, type: 'income', amount: 2500, category: 'Salary', description: 'Monthly salary', date: '2025-10-24' },
-    { id: 3, type: 'expense', amount: 120, category: 'Transport', description: 'Gas', date: '2025-10-23' },
-    { id: 4, type: 'expense', amount: 85, category: 'Entertainment', description: 'Cinema tickets', date: '2025-10-22' },
-    { id: 5, type: 'income', amount: 200, category: 'Freelance', description: 'Web design project', date: '2025-10-21' },
-    { id: 6, type: 'expense', amount: 60, category: 'Food', description: 'Restaurant', date: '2025-10-20' },
-    { id: 7, type: 'expense', amount: 150, category: 'Shopping', description: 'Clothes', date: '2025-10-19' },
-    { id: 8, type: 'income', amount: 500, category: 'Freelance', description: 'Design project', date: '2025-10-18' },
-  ]);
+  const [transactions, setTransactions] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [visibleTransactions, setVisibleTransactions] = useState(5);
   const [newTransaction, setNewTransaction] = useState({
@@ -31,11 +23,19 @@ const ExpenseDashboard = () => {
     date: new Date().toISOString().split('T')[0]
   });
   const [dateRange, setDateRange] = useState('month');
-
-  const defaultCategories = {
-    expense: ['Food', 'Transport', 'Entertainment', 'Health', 'Utilities', 'Shopping', 'Education', 'Other'],
-    income: ['Salary', 'Freelance', 'Investment', 'Business', 'Gift', 'Other']
-  };
+  const [summaryStats, setSummaryStats] = useState({
+    total_income: 0,
+    total_expenses: 0,
+    balance: 0
+  });
+  const [categoryData, setCategoryData] = useState([]);
+  const [dailyChartData, setDailyChartData] = useState([]);
+  const [defaultCategories, setDefaultCategories] = useState({
+    expense: [],
+    income: []
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const apps = [
     { id: 'expenses', name: 'Expense Tracker', icon: Wallet },
@@ -44,89 +44,103 @@ const ExpenseDashboard = () => {
     { id: 'assistant', name: 'AI Assistant', icon: Bot, disabled: true },
   ];
 
-  const getFilteredTransactions = () => {
-    const now = new Date();
-    const cutoffDate = new Date();
-    
-    switch(dateRange) {
-      case 'week':
-        cutoffDate.setDate(now.getDate() - 7);
-        break;
-      case 'month':
-        cutoffDate.setMonth(now.getMonth() - 1);
-        break;
-      case 'year':
-        cutoffDate.setFullYear(now.getFullYear() - 1);
-        break;
-      default:
-        return transactions;
+  // Fetch all data when component mounts or dateRange changes
+  useEffect(() => {
+    fetchAllData();
+  }, [dateRange]);
+
+  const fetchAllData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch all data in parallel
+      const [
+        transactionsRes,
+        summaryRes,
+        categoryRes,
+        dailyRes,
+        categoriesRes
+      ] = await Promise.all([
+        apiService.getTransactions(dateRange),
+        apiService.getSummaryStats(dateRange),
+        apiService.getCategoryStats(dateRange),
+        apiService.getDailyStats(dateRange),
+        apiService.getCategories()
+      ]);
+
+      setTransactions(transactionsRes.data);
+      setSummaryStats(summaryRes.data);
+      setCategoryData(categoryRes.data);
+      setDailyChartData(dailyRes.data);
+      setDefaultCategories(categoriesRes.data);
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError('Failed to load data. Please make sure the backend is running.');
+      setLoading(false);
     }
-    
-    return transactions.filter(t => new Date(t.date) >= cutoffDate);
   };
 
-  const addTransaction = () => {
+  const addTransaction = async () => {
     if (!newTransaction.amount || !newTransaction.category) return;
     
-    setTransactions([
-      {
-        id: Date.now(),
+    try {
+      const response = await apiService.addTransaction({
         ...newTransaction,
         amount: parseFloat(newTransaction.amount)
-      },
-      ...transactions
-    ]);
-    
-    setNewTransaction({
-      type: 'expense',
-      amount: '',
-      category: '',
-      description: '',
-      date: new Date().toISOString().split('T')[0]
-    });
-    setShowAddModal(false);
+      });
+
+      // Refresh all data after adding
+      await fetchAllData();
+      
+      setNewTransaction({
+        type: 'expense',
+        amount: '',
+        category: '',
+        description: '',
+        date: new Date().toISOString().split('T')[0]
+      });
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Error adding transaction:', err);
+      setError('Failed to add transaction');
+    }
   };
 
-  const filteredTransactions = getFilteredTransactions();
-  
-  const totalIncome = filteredTransactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + t.amount, 0);
-  
-  const totalExpenses = filteredTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + t.amount, 0);
+  if (loading) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const balance = totalIncome - totalExpenses;
-
-  const allCategories = [...new Set(transactions.map(t => t.category))];
-  
-  const categoryData = allCategories
-    .map(cat => ({
-      name: cat,
-      value: filteredTransactions
-        .filter(t => t.type === 'expense' && t.category === cat)
-        .reduce((sum, t) => sum + t.amount, 0),
-    }))
-    .filter(d => d.value > 0)
-    .sort((a, b) => b.value - a.value);
-
-  const dailyData = {};
-  filteredTransactions.forEach(t => {
-    const dateKey = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    if (!dailyData[dateKey]) {
-      dailyData[dateKey] = { date: dateKey, expenses: 0, income: 0 };
-    }
-    if (t.type === 'expense') {
-      dailyData[dateKey].expenses += t.amount;
-    } else {
-      dailyData[dateKey].income += t.amount;
-    }
-  });
-  
-  const dailyChartData = Object.values(dailyData).sort((a, b) => 
-    new Date(a.date) - new Date(b.date)
-  );
+  if (error) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 flex items-center justify-center">
+        <div className="bg-white rounded-xl p-6 shadow-lg max-w-md">
+          <div className="text-red-500 text-center mb-4">
+            <svg className="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-lg font-semibold text-slate-800">Connection Error</h3>
+          </div>
+          <p className="text-slate-600 text-center mb-4">{error}</p>
+          <button
+            onClick={fetchAllData}
+            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2 rounded-lg font-medium transition-all"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 overflow-hidden">
@@ -266,21 +280,21 @@ const ExpenseDashboard = () => {
                   <StatCard 
                     icon={TrendingUp}
                     label="Income"
-                    value={`$${totalIncome.toFixed(2)}`}
+                    value={`$${summaryStats.total_income.toFixed(2)}`}
                     variant="income"
                   />
                   
                   <StatCard 
                     icon={TrendingDown}
                     label="Expenses"
-                    value={`$${totalExpenses.toFixed(2)}`}
+                    value={`$${summaryStats.total_expenses.toFixed(2)}`}
                     variant="expense"
                   />
                   
                   <StatCard 
                     icon={Wallet}
                     label="Balance"
-                    value={`$${balance.toFixed(2)}`}
+                    value={`$${summaryStats.balance.toFixed(2)}`}
                     variant="balance"
                   />
 
@@ -300,10 +314,10 @@ const ExpenseDashboard = () => {
               </div>
 
               <TransactionList 
-                transactions={filteredTransactions}
+                transactions={transactions}
                 visibleCount={visibleTransactions}
                 setVisibleCount={setVisibleTransactions}
-                totalCount={filteredTransactions.length}
+                totalCount={transactions.length}
               />
             </div>
           </div>
