@@ -10,11 +10,12 @@ services:
 
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        API_URL: http://localhost:5050/api
     ports:
       - "3000:80"
-    environment:
-      - API_URL=http://localhost:5050/api
     volumes:
       - ./frontend:/app
     depends_on:
