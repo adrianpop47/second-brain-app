@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Wallet, CheckSquare, Target, Bot, Plus, TrendingUp, TrendingDown, Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import StatCard from './components/StatCard';
@@ -47,7 +47,8 @@ const ExpenseDashboard = () => {
   // Fetch all data when component mounts or dateRange changes
   useEffect(() => {
     fetchAllData();
-  }, [dateRange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange]); 
 
   const fetchAllData = async () => {
     try {
@@ -87,7 +88,7 @@ const ExpenseDashboard = () => {
     if (!newTransaction.amount || !newTransaction.category) return;
     
     try {
-      const response = await apiService.addTransaction({
+      await apiService.addTransaction({
         ...newTransaction,
         amount: parseFloat(newTransaction.amount)
       });
