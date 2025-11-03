@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { X } from 'lucide-react';
 
 const AddTransactionModal = ({ 
@@ -6,9 +7,33 @@ const AddTransactionModal = ({
   newTransaction, 
   setNewTransaction, 
   onAdd,
-  defaultCategories 
+  contextId, // If provided, transaction is for specific context
+  contexts = [] // For selecting context if not in a specific context
 }) => {
+  const [tagInput, setTagInput] = useState('');
+
   if (!showModal) return null;
+
+  const handleAddTag = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const tag = tagInput.trim().replace(/^#/, ''); // Remove # if user typed it
+      if (tag && !newTransaction.tags?.includes(tag)) {
+        setNewTransaction({
+          ...newTransaction,
+          tags: [...(newTransaction.tags || []), tag]
+        });
+        setTagInput('');
+      }
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    setNewTransaction({
+      ...newTransaction,
+      tags: newTransaction.tags.filter(tag => tag !== tagToRemove)
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -24,6 +49,26 @@ const AddTransactionModal = ({
         </div>
         
         <div className="space-y-4">
+          {/* Context Selector (only if not in a specific context) */}
+          {!contextId && contexts.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Context</label>
+              <select
+                value={newTransaction.contextId || ''}
+                onChange={(e) => setNewTransaction({ ...newTransaction, contextId: parseInt(e.target.value) })}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+              >
+                <option value="">Select context</option>
+                {contexts.map(ctx => (
+                  <option key={ctx.id} value={ctx.id}>
+                    {ctx.emoji} {ctx.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Type */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Type</label>
             <div className="flex gap-2">
@@ -50,6 +95,7 @@ const AddTransactionModal = ({
             </div>
           </div>
 
+          {/* Amount */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Amount</label>
             <input
@@ -61,23 +107,37 @@ const AddTransactionModal = ({
             />
           </div>
 
+          {/* Tags */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Category</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Tags</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {newTransaction.tags?.map((tag, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md text-xs font-medium"
+                >
+                  #{tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="hover:text-indigo-900"
+                  >
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
             <input
               type="text"
-              list="categories"
-              value={newTransaction.category}
-              onChange={(e) => setNewTransaction({ ...newTransaction, category: e.target.value })}
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleAddTag}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-              placeholder="Type or select category"
+              placeholder="Type tag and press Enter (e.g., software, monthly)"
             />
-            <datalist id="categories">
-              {defaultCategories[newTransaction.type].map(cat => (
-                <option key={cat} value={cat} />
-              ))}
-            </datalist>
+            <p className="text-xs text-slate-500 mt-1">Press Enter or comma to add a tag</p>
           </div>
 
+          {/* Description */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
             <input
@@ -89,6 +149,7 @@ const AddTransactionModal = ({
             />
           </div>
 
+          {/* Date */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
             <input

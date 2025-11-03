@@ -27,9 +27,57 @@ class ApiService {
     }
   }
 
-  // Get all transactions with optional date range filter
-  async getTransactions(dateRange = 'all') {
-    return this.request(`/transactions?range=${dateRange}`);
+  // ============================================================================
+  // CONTEXT ENDPOINTS
+  // ============================================================================
+
+  // Get all contexts
+  async getContexts() {
+    return this.request('/contexts');
+  }
+
+  // Create a new context
+  async createContext(context) {
+    return this.request('/contexts', {
+      method: 'POST',
+      body: JSON.stringify(context),
+    });
+  }
+
+  // Update a context
+  async updateContext(contextId, context) {
+    return this.request(`/contexts/${contextId}`, {
+      method: 'PUT',
+      body: JSON.stringify(context),
+    });
+  }
+
+  // Delete a context
+  async deleteContext(contextId) {
+    return this.request(`/contexts/${contextId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Get context overview (stats + recent items)
+  async getContextOverview(contextId) {
+    return this.request(`/contexts/${contextId}/overview`);
+  }
+
+  // Get transactions for a specific context
+  async getContextTransactions(contextId, dateRange = 'all') {
+    return this.request(`/contexts/${contextId}/transactions?range=${dateRange}`);
+  }
+
+  // ============================================================================
+  // TRANSACTION ENDPOINTS
+  // ============================================================================
+
+  // Get all transactions with optional date range and context filter
+  async getTransactions(dateRange = 'all', contextId = null) {
+    const params = new URLSearchParams({ range: dateRange });
+    if (contextId) params.append('contextId', contextId);
+    return this.request(`/transactions?${params}`);
   }
 
   // Add a new transaction
@@ -55,24 +103,34 @@ class ApiService {
     });
   }
 
+  // ============================================================================
+  // STATS ENDPOINTS
+  // ============================================================================
+
   // Get summary statistics (income, expenses, balance)
-  async getSummaryStats(dateRange = 'all') {
-    return this.request(`/stats/summary?range=${dateRange}`);
+  async getSummaryStats(dateRange = 'all', contextId = null) {
+    const params = new URLSearchParams({ range: dateRange });
+    if (contextId) params.append('contextId', contextId);
+    return this.request(`/stats/summary?${params}`);
   }
 
-  // Get category statistics for pie chart
-  async getCategoryStats(dateRange = 'all') {
-    return this.request(`/stats/categories?range=${dateRange}`);
+  // Get expenses grouped by context (for Home view pie chart)
+  async getStatsByContext(dateRange = 'all') {
+    return this.request(`/stats/by-context?range=${dateRange}`);
+  }
+
+  // Get expenses grouped by tag (for context finances pie chart)
+  async getStatsByTag(dateRange = 'all', contextId = null) {
+    const params = new URLSearchParams({ range: dateRange });
+    if (contextId) params.append('contextId', contextId);
+    return this.request(`/stats/by-tag?${params}`);
   }
 
   // Get daily statistics for line chart
-  async getDailyStats(dateRange = 'all') {
-    return this.request(`/stats/daily?range=${dateRange}`);
-  }
-
-  // Get available categories
-  async getCategories() {
-    return this.request('/categories');
+  async getDailyStats(dateRange = 'all', contextId = null) {
+    const params = new URLSearchParams({ range: dateRange });
+    if (contextId) params.append('contextId', contextId);
+    return this.request(`/stats/daily?${params}`);
   }
 
   // Health check
