@@ -5,7 +5,7 @@ const COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4'
 const ExpenseChart = ({ data }) => {
   return (
     <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
-      <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4">Expenses by Category</h3>
+      <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4">Expenses by Tag</h3>
       <ResponsiveContainer width="100%" height={220}>
         <RePieChart>
           <Pie
