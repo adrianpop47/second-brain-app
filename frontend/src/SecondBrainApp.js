@@ -43,6 +43,7 @@ const SecondBrainApp = () => {
     if (activeView.type === 'home') {
       fetchHomeData();
     }
+// eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange, activeView.type]);
 
   // Fetch context overview when navigating to a context

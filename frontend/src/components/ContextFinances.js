@@ -31,6 +31,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
 
   useEffect(() => {
     fetchContextData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.id, dateRange]);
 
   const fetchContextData = async () => {
