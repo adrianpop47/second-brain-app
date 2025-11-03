@@ -168,6 +168,13 @@ const SecondBrainApp = () => {
     }
   };
 
+  // Handler for when data is updated in ContextOverview
+  const handleContextDataUpdate = () => {
+    if (activeView.type === 'context' && activeView.contextId) {
+      fetchContextOverview(activeView.contextId);
+    }
+  };
+
   // Render loading state
   if (loading) {
     return (
@@ -243,6 +250,7 @@ const SecondBrainApp = () => {
             stats={contextOverview?.stats || {}}
             recentTransactions={contextOverview?.recent_transactions || []}
             loading={overviewLoading}
+            onDataUpdate={handleContextDataUpdate}
           />
         );
       }
