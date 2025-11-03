@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, BarChart3, CheckSquare, Lightbulb, Calendar } from 'lucide-react';
 import ContextSidebar from './components/ContextSidebar';
 import ContextSettingsModal from './components/ContextSettingsModal';
 import ContextOverview from './components/ContextOverview';
@@ -20,6 +20,7 @@ const SecondBrainApp = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showAddContextModal, setShowAddContextModal] = useState(false);
   const [selectedContext, setSelectedContext] = useState(null);
+  const [viewBeforeSettings, setViewBeforeSettings] = useState(null);
   
   // Home view data
   const [homeStats, setHomeStats] = useState({
@@ -98,8 +99,20 @@ const SecondBrainApp = () => {
   };
 
   const handleContextSettings = (context) => {
+    // Save the current view before opening settings
+    setViewBeforeSettings(activeView);
     setSelectedContext(context);
     setShowSettingsModal(true);
+  };
+
+  const handleCloseSettings = () => {
+    setShowSettingsModal(false);
+    setShowAddContextModal(false);
+    // Restore the view we were on before opening settings
+    if (viewBeforeSettings) {
+      setActiveView(viewBeforeSettings);
+      setViewBeforeSettings(null);
+    }
   };
 
   const handleSaveContext = async (contextData) => {
@@ -121,8 +134,7 @@ const SecondBrainApp = () => {
       }
       
       await fetchContexts();
-      setShowSettingsModal(false);
-      setShowAddContextModal(false);
+      handleCloseSettings();
     } catch (err) {
       console.error('Error saving context:', err);
       alert('Failed to save context');
@@ -133,7 +145,7 @@ const SecondBrainApp = () => {
     try {
       await apiService.deleteContext(contextId);
       await fetchContexts();
-      setShowSettingsModal(false);
+      handleCloseSettings();
       
       // Navigate to home if we deleted the current context
       if (activeView.type === 'context' && activeView.contextId === contextId) {
@@ -146,12 +158,13 @@ const SecondBrainApp = () => {
   };
 
   const handleNavigation = (view) => {
-    setActiveView(view);
-    
-    // Open settings modal if navigating to settings
+    // If navigating to settings, save current view and open modal
     if (view.type === 'context' && view.app === 'settings') {
       const context = contexts.find(c => c.id === view.contextId);
+      setViewBeforeSettings({ type: 'context', contextId: view.contextId, app: 'overview' });
       handleContextSettings(context);
+    } else {
+      setActiveView(view);
     }
   };
 
@@ -213,7 +226,9 @@ const SecondBrainApp = () => {
     if (activeView.type === 'insights') {
       return (
         <div className="text-center py-12">
-          <div className="text-6xl mb-4">📊</div>
+          <div className="w-24 h-24 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-4">
+            <BarChart3 size={48} className="text-indigo-600" />
+          </div>
           <h2 className="text-2xl font-semibold text-slate-800 mb-2">Insights Coming Soon</h2>
           <p className="text-slate-600">Advanced analytics and insights will be available here</p>
         </div>
@@ -245,7 +260,9 @@ const SecondBrainApp = () => {
       if (activeView.app === 'todos') {
         return (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">✅</div>
+            <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+              <CheckSquare size={48} className="text-blue-600" />
+            </div>
             <h2 className="text-2xl font-semibold text-slate-800 mb-2">Todos Coming Soon</h2>
             <p className="text-slate-600">Task management with Kanban board</p>
           </div>
@@ -255,7 +272,9 @@ const SecondBrainApp = () => {
       if (activeView.app === 'ideas') {
         return (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">💡</div>
+            <div className="w-24 h-24 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+              <Lightbulb size={48} className="text-purple-600" />
+            </div>
             <h2 className="text-2xl font-semibold text-slate-800 mb-2">Ideas Coming Soon</h2>
             <p className="text-slate-600">Capture and organize your ideas</p>
           </div>
@@ -265,7 +284,9 @@ const SecondBrainApp = () => {
       if (activeView.app === 'calendar') {
         return (
           <div className="text-center py-12">
-            <div className="text-6xl mb-4">📅</div>
+            <div className="w-24 h-24 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+              <Calendar size={48} className="text-orange-600" />
+            </div>
             <h2 className="text-2xl font-semibold text-slate-800 mb-2">Calendar Coming Soon</h2>
             <p className="text-slate-600">Schedule and manage your events</p>
           </div>
@@ -284,7 +305,12 @@ const SecondBrainApp = () => {
 
   return (
     <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 overflow-hidden">
-      <div className="flex h-full">
+      <div className="flex h-full relative">
+        {/* Settings Overlay - Grays out the background */}
+        {(showSettingsModal || showAddContextModal) && (
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px] z-40 pointer-events-none" />
+        )}
+
         {/* Mobile overlay */}
         {sidebarOpen && (
           <div 
@@ -315,7 +341,7 @@ const SecondBrainApp = () => {
           <div className={`h-full flex flex-col ${sidebarOpen ? '' : 'invisible'}`}>
             <ContextSidebar 
               contexts={contexts}
-              activeView={activeView}
+              activeView={viewBeforeSettings || activeView}
               setActiveView={handleNavigation}
               sidebarOpen={sidebarOpen}
               setSidebarOpen={setSidebarOpen}
@@ -326,7 +352,7 @@ const SecondBrainApp = () => {
         </aside>
 
         {/* Main content */}
-        <div className="flex-1 overflow-auto">
+        <div className={`flex-1 overflow-auto ${(showSettingsModal || showAddContextModal) ? 'pointer-events-none' : ''}`}>
           <div className="p-6 md:p-8">
             <div className="max-w-6xl mx-auto">
               {/* Header with hamburger menu */}
@@ -352,16 +378,16 @@ const SecondBrainApp = () => {
       <ContextSettingsModal
         context={selectedContext}
         show={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
+        onClose={handleCloseSettings}
         onSave={handleSaveContext}
         onDelete={handleDeleteContext}
       />
 
       {/* Add Context Modal (reuse settings modal with no context) */}
       <ContextSettingsModal
-        context={{ name: '', emoji: '📁', color: '#000000' }}
+        context={{ name: '', emoji: 'Briefcase', color: '#000000' }}
         show={showAddContextModal}
-        onClose={() => setShowAddContextModal(false)}
+        onClose={handleCloseSettings}
         onSave={handleSaveContext}
         onDelete={() => {}}
       />
