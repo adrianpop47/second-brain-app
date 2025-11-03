@@ -1,24 +1,42 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Briefcase, Heart, Home, Book, Music, Coffee, Camera, Plane, ShoppingBag, Dumbbell, GraduationCap, Palette, Code, Zap, Target, Sparkles, Sun, Moon, Star, Gift } from 'lucide-react';
 
 const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState({
     name: '',
-    emoji: '📁',
+    emoji: 'Briefcase',
     color: '#000000'
   });
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  const commonEmojis = [
-    '💼', '🏋️', '🏥', '📚', '🎨', '🎯', '💡', '🚀',
-    '🏠', '🌟', '📱', '💻', '🎮', '🎵', '📷', '✈️',
-    '🍎', '⚡', '🔥', '💰', '🎓', '🏆', '📊', '📅'
+  // Icon options that match the app style
+  const iconOptions = [
+    { name: 'Briefcase', icon: Briefcase, label: 'Work' },
+    { name: 'Heart', icon: Heart, label: 'Health' },
+    { name: 'Dumbbell', icon: Dumbbell, label: 'Fitness' },
+    { name: 'Home', icon: Home, label: 'Home' },
+    { name: 'Book', icon: Book, label: 'Learning' },
+    { name: 'GraduationCap', icon: GraduationCap, label: 'Education' },
+    { name: 'Music', icon: Music, label: 'Music' },
+    { name: 'Coffee', icon: Coffee, label: 'Social' },
+    { name: 'Camera', icon: Camera, label: 'Creative' },
+    { name: 'Palette', icon: Palette, label: 'Art' },
+    { name: 'Plane', icon: Plane, label: 'Travel' },
+    { name: 'ShoppingBag', icon: ShoppingBag, label: 'Shopping' },
+    { name: 'Code', icon: Code, label: 'Dev' },
+    { name: 'Zap', icon: Zap, label: 'Energy' },
+    { name: 'Target', icon: Target, label: 'Goals' },
+    { name: 'Sparkles', icon: Sparkles, label: 'Special' },
+    { name: 'Sun', icon: Sun, label: 'Wellness' },
+    { name: 'Moon', icon: Moon, label: 'Rest' },
+    { name: 'Star', icon: Star, label: 'Favorites' },
+    { name: 'Gift', icon: Gift, label: 'Gifts' },
   ];
 
   const commonColors = [
-    '#000000', // Black (default)
+    '#000000', // Black
     '#EF4444', // Red
     '#F59E0B', // Orange
     '#10B981', // Green
@@ -32,7 +50,7 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
     if (context) {
       setFormData({
         name: context.name || '',
-        emoji: context.emoji || '📁',
+        emoji: context.emoji || 'Briefcase',
         color: context.color || '#000000'
       });
     }
@@ -53,6 +71,10 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
   };
 
   if (!show) return null;
+
+  // Get the selected icon component
+  const selectedIconOption = iconOptions.find(opt => opt.name === formData.emoji) || iconOptions[0];
+  const SelectedIcon = selectedIconOption.icon;
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -80,35 +102,45 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
             />
           </div>
 
-          {/* Emoji */}
+          {/* Icon */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Emoji</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Icon</label>
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent hover:bg-slate-100 transition-colors"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent hover:bg-slate-100 transition-colors flex items-center gap-2"
               >
-                <span className="text-2xl">{formData.emoji}</span>
-                <span className="ml-2 text-sm text-slate-600">Click to change</span>
+                <div className="p-1.5 bg-slate-200 rounded-lg">
+                  <SelectedIcon size={20} className="text-slate-700" />
+                </div>
+                <span className="text-sm text-slate-600">{selectedIconOption.label}</span>
               </button>
               
               {showEmojiPicker && (
-                <div className="absolute z-10 mt-2 w-full bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
-                  <div className="grid grid-cols-8 gap-2">
-                    {commonEmojis.map(emoji => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => {
-                          setFormData({ ...formData, emoji });
-                          setShowEmojiPicker(false);
-                        }}
-                        className="text-2xl hover:bg-slate-100 rounded p-1 transition-colors"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
+                <div className="absolute z-10 mt-2 w-full bg-white border border-slate-200 rounded-lg p-3 shadow-lg max-h-64 overflow-y-auto">
+                  <div className="grid grid-cols-4 gap-2">
+                    {iconOptions.map(option => {
+                      const IconComponent = option.icon;
+                      return (
+                        <button
+                          key={option.name}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, emoji: option.name });
+                            setShowEmojiPicker(false);
+                          }}
+                          className={`p-3 rounded-lg transition-colors flex flex-col items-center gap-1 ${
+                            formData.emoji === option.name
+                              ? 'bg-indigo-100 text-indigo-700'
+                              : 'hover:bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          <IconComponent size={20} />
+                          <span className="text-xs">{option.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

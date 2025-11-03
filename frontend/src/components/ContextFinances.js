@@ -50,6 +50,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
         apiService.getDailyStats(dateRange, context.id)
       ]);
 
+      console.log('Fetched transactions:', transactionsRes.data); // DEBUG
       setTransactions(transactionsRes.data);
       setSummaryStats(summaryRes.data);
       setTagData(tagRes.data);
@@ -69,14 +70,23 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
     }
     
     try {
-      await apiService.addTransaction({
-        ...newTransaction,
+      const transactionToAdd = {
+        type: newTransaction.type,
         amount: parseFloat(newTransaction.amount),
+        description: newTransaction.description,
+        tags: Array.isArray(newTransaction.tags) ? newTransaction.tags : [],
+        date: newTransaction.date,
         contextId: context.id
-      });
+      };
+
+      console.log('Sending transaction:', transactionToAdd); // DEBUG
+
+      const response = await apiService.addTransaction(transactionToAdd);
+      console.log('Backend response:', response); // DEBUG
 
       await fetchContextData();
       
+      // Reset form
       setNewTransaction({
         type: 'expense',
         amount: '',
@@ -88,7 +98,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
       setShowAddModal(false);
     } catch (err) {
       console.error('Error adding transaction:', err);
-      alert('Failed to add transaction');
+      alert('Failed to add transaction: ' + err.message);
     }
   };
 
@@ -105,9 +115,8 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <span className="text-3xl">{context.emoji}</span>
           <div>
-            <h2 className="text-2xl font-semibold text-slate-800">{context.name} {'>'} Finances</h2>
+            <h2 className="text-2xl font-semibold text-slate-800">{context.name} › Finances</h2>
             <p className="text-sm text-slate-500">Financial tracking for this context</p>
           </div>
         </div>
@@ -148,7 +157,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ExpenseChart data={tagData} />
+        <ExpenseChart data={tagData} title="Expenses by Tag" />
         <IncomeExpenseChart data={dailyChartData} />
       </div>
 

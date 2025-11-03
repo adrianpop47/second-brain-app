@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, Plus, Briefcase, Heart, Home, Book, Music, Coffee, Camera, Plane, ShoppingBag, Dumbbell, GraduationCap, Palette, Code, Zap, Target, Sparkles, Sun, Moon, Star, Gift, BarChart3, Wallet, CheckSquare, Lightbulb, Calendar, Settings } from 'lucide-react';
 
 const ContextSidebar = ({ 
   contexts, 
@@ -10,20 +10,54 @@ const ContextSidebar = ({
 }) => {
   const [expandedContexts, setExpandedContexts] = useState({});
 
-  const toggleContext = (contextId) => {
-    setExpandedContexts(prev => ({
-      ...prev,
-      [contextId]: !prev[contextId]
-    }));
+  // Icon mapping for context emojis
+  const iconMap = {
+    'Briefcase': Briefcase,
+    'Heart': Heart,
+    'Dumbbell': Dumbbell,
+    'Home': Home,
+    'Book': Book,
+    'GraduationCap': GraduationCap,
+    'Music': Music,
+    'Coffee': Coffee,
+    'Camera': Camera,
+    'Palette': Palette,
+    'Plane': Plane,
+    'ShoppingBag': ShoppingBag,
+    'Code': Code,
+    'Zap': Zap,
+    'Target': Target,
+    'Sparkles': Sparkles,
+    'Sun': Sun,
+    'Moon': Moon,
+    'Star': Star,
+    'Gift': Gift,
   };
 
+  const toggleContext = (contextId) => {
+    setExpandedContexts(prev => {
+      // Create new state object
+      const newState = {};
+      
+      // If clicking on an already expanded context, just close it
+      if (prev[contextId]) {
+        return newState; // Close all (including this one)
+      }
+      
+      // Otherwise, close all others and open this one
+      newState[contextId] = true;
+      return newState;
+    });
+  };
+
+  // Context apps with Lucide outlined icons - consistent style
   const contextApps = [
-    { id: 'overview', name: 'Overview', icon: '📊' },
-    { id: 'finances', name: 'Finances', icon: '💰' },
-    { id: 'todos', name: 'Todos', icon: '✅' },
-    { id: 'ideas', name: 'Ideas', icon: '💡' },
-    { id: 'calendar', name: 'Calendar', icon: '📅' },
-    { id: 'settings', name: 'Settings', icon: '⚙️' },
+    { id: 'overview', name: 'Overview', icon: BarChart3 },
+    { id: 'finances', name: 'Finances', icon: Wallet },
+    { id: 'todos', name: 'Todos', icon: CheckSquare },
+    { id: 'ideas', name: 'Ideas', icon: Lightbulb },
+    { id: 'calendar', name: 'Calendar', icon: Calendar },
+    { id: 'settings', name: 'Settings', icon: Settings },
   ];
 
   const handleNavigation = (view) => {
@@ -58,7 +92,7 @@ const ContextSidebar = ({
               : 'text-slate-600 hover:bg-slate-100/80'
           }`}
         >
-          <span>🏠</span>
+          <Home size={18} />
           <span className="font-medium whitespace-nowrap">Home</span>
         </button>
 
@@ -71,7 +105,7 @@ const ContextSidebar = ({
               : 'text-slate-600 hover:bg-slate-100/80'
           }`}
         >
-          <span>📊</span>
+          <BarChart3 size={18} />
           <span className="font-medium whitespace-nowrap">Insights</span>
         </button>
 
@@ -84,6 +118,9 @@ const ContextSidebar = ({
         {contexts.map(context => {
           const isExpanded = expandedContexts[context.id];
           const isActive = activeView.type === 'context' && activeView.contextId === context.id;
+          
+          // Get the icon component for this context
+          const IconComponent = iconMap[context.emoji] || Briefcase;
 
           return (
             <div key={context.id} className="space-y-0.5">
@@ -105,7 +142,7 @@ const ContextSidebar = ({
                 ) : (
                   <ChevronRight size={16} className="flex-shrink-0" />
                 )}
-                <span className="text-base">{context.emoji}</span>
+                <IconComponent size={18} className="flex-shrink-0" />
                 <span className="font-medium whitespace-nowrap flex-1 text-left">{context.name}</span>
                 <div 
                   className="w-2 h-2 rounded-full flex-shrink-0" 
@@ -113,27 +150,30 @@ const ContextSidebar = ({
                 ></div>
               </button>
 
-              {/* Context Apps */}
+              {/* Context Apps - All with Lucide icons */}
               {isExpanded && (
                 <div className="ml-6 space-y-0.5">
-                  {contextApps.map(app => (
-                    <button
-                      key={app.id}
-                      onClick={() => handleNavigation({ 
-                        type: 'context', 
-                        contextId: context.id, 
-                        app: app.id 
-                      })}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-xs ${
-                        isActive && activeView.app === app.id
-                          ? 'bg-indigo-500/90 text-white shadow-sm'
-                          : 'text-slate-600 hover:bg-slate-100/80'
-                      }`}
-                    >
-                      <span className="text-sm">{app.icon}</span>
-                      <span className="font-medium whitespace-nowrap">{app.name}</span>
-                    </button>
-                  ))}
+                  {contextApps.map(app => {
+                    const AppIcon = app.icon;
+                    return (
+                      <button
+                        key={app.id}
+                        onClick={() => handleNavigation({ 
+                          type: 'context', 
+                          contextId: context.id, 
+                          app: app.id 
+                        })}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-xs ${
+                          isActive && activeView.app === app.id
+                            ? 'bg-indigo-500/90 text-white shadow-sm'
+                            : 'text-slate-600 hover:bg-slate-100/80'
+                        }`}
+                      >
+                        <AppIcon size={16} />
+                        <span className="font-medium whitespace-nowrap">{app.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
