@@ -5,6 +5,7 @@ import ContextSettingsModal from './components/ContextSettingsModal';
 import ContextOverview from './components/ContextOverview';
 import HomeView from './components/HomeView';
 import ContextFinances from './components/ContextFinances';
+import ContextTodos from './components/ContextTodos';
 import apiService from './services/apiService';
 
 const SecondBrainApp = () => {
@@ -251,6 +252,7 @@ const SecondBrainApp = () => {
             recentTransactions={contextOverview?.recent_transactions || []}
             loading={overviewLoading}
             onDataUpdate={handleContextDataUpdate}
+            onNavigateToTodos={() => handleNavigation({ type: 'context', contextId: currentContext.id, app: 'todos' })}
           />
         );
       }
@@ -267,13 +269,7 @@ const SecondBrainApp = () => {
 
       if (activeView.app === 'todos') {
         return (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
-              <CheckSquare size={48} className="text-blue-600" />
-            </div>
-            <h2 className="text-2xl font-semibold text-slate-800 mb-2">Todos Coming Soon</h2>
-            <p className="text-slate-600">Task management with Kanban board</p>
-          </div>
+          <ContextTodos context={currentContext} />
         );
       }
 

@@ -104,6 +104,38 @@ class ApiService {
   }
 
   // ============================================================================
+  // TODOS ENDPOINTS
+  // ============================================================================
+
+  // Get todos for a specific context
+  async getContextTodos(contextId) {
+    return this.request(`/contexts/${contextId}/todos`);
+  }
+
+  // Add a new todo
+  async addTodo(todo) {
+    return this.request('/todos', {
+      method: 'POST',
+      body: JSON.stringify(todo),
+    });
+  }
+
+  // Update a todo
+  async updateTodo(todoId, updates) {
+    return this.request(`/todos/${todoId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // Delete a todo
+  async deleteTodo(todoId) {
+    return this.request(`/todos/${todoId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ============================================================================
   // STATS ENDPOINTS
   // ============================================================================
 

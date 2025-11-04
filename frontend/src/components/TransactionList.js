@@ -5,7 +5,9 @@ import TransactionItem from './TransactionItem';
 const TransactionList = ({ 
   transactions, 
   visibleCount, 
-  setVisibleCount
+  setVisibleCount,
+  onEdit,
+  onDelete
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -79,6 +81,8 @@ const TransactionList = ({
                 key={`${transaction.id}-${visibleCount}`}
                 transaction={transaction} 
                 index={index}
+                onEdit={onEdit}
+                onDelete={onDelete}
               />
             ))}
           </div>
