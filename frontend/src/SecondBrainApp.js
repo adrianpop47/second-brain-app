@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, BarChart3, CheckSquare, Lightbulb, Calendar } from 'lucide-react';
+import { Menu, BarChart3, Lightbulb, Calendar } from 'lucide-react';
 import ContextSidebar from './components/ContextSidebar';
 import ContextSettingsModal from './components/ContextSettingsModal';
 import ContextOverview from './components/ContextOverview';

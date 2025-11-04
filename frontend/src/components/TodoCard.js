@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MoreVertical, Trash2, Calendar, Flag, Tag, Edit2, Check, X } from 'lucide-react';
 
-const TodoCard = ({ todo, onUpdateStatus, onDeleteTodo, onUpdateTodo }) => {
+const TodoCard = ({ todo, onDeleteTodo, onUpdateTodo }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(todo.title);

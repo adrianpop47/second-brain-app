@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, Wallet, Plus, MoreVertical, Edit2, Trash2, Check } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, Wallet, Plus, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import AddTransactionModal from './AddTransactionModal';
 import AddTodoModal from './AddTodoModal';
 import EditTodoModal from './EditTodoModal';
 import apiService from '../services/apiService';
 
-const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUpdate, onNavigateToTodos }) => {
+const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUpdate }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddTodoModal, setShowAddTodoModal] = useState(false);
   const [recentTodos, setRecentTodos] = useState([]);

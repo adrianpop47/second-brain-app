@@ -12,6 +12,7 @@ const HomeView = ({
 }) => {
   const [allTodos, setAllTodos] = useState([]);
   const [todosLoading, setTodosLoading] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [contexts, setContexts] = useState([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTodo, setEditingTodo] = useState(null);
