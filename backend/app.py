@@ -24,9 +24,47 @@ transactions = [
     {'id': 8, 'contextId': 1, 'type': 'income', 'amount': 500, 'tags': ['client', 'project'], 'description': 'Design project', 'date': '2025-10-18'},
 ]
 
+# Todos storage
+todos = [
+    {
+        'id': 1,
+        'contextId': 1,
+        'title': 'Complete project proposal',
+        'description': 'Write and submit the Q4 project proposal to the client',
+        'status': 'todo',
+        'priority': 'high',
+        'dueDate': '2025-11-15',
+        'tags': ['client', 'urgent'],
+        'createdAt': '2025-11-01'
+    },
+    {
+        'id': 2,
+        'contextId': 1,
+        'title': 'Review team performance',
+        'description': 'Schedule 1-on-1 meetings with team members',
+        'status': 'in_progress',
+        'priority': 'medium',
+        'dueDate': '2025-11-10',
+        'tags': ['management', 'team'],
+        'createdAt': '2025-11-01'
+    },
+    {
+        'id': 3,
+        'contextId': 2,
+        'title': 'Morning workout routine',
+        'description': '30 minutes cardio + strength training',
+        'status': 'done',
+        'priority': 'high',
+        'dueDate': '2025-11-04',
+        'tags': ['daily', 'health'],
+        'createdAt': '2025-10-28'
+    },
+]
+
 # ID counters to prevent collisions
 next_context_id = 4
 next_transaction_id = 9
+next_todo_id = 4
 
 def filter_transactions_by_range(date_range):
     now = datetime.now()
@@ -48,6 +86,10 @@ def filter_transactions_by_range(date_range):
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy', 'message': 'Flask API is running'}), 200
+
+# ============================================================================
+# CONTEXT ENDPOINTS
+# ============================================================================
 
 @app.route('/api/contexts', methods=['GET'])
 def get_contexts():
@@ -110,7 +152,7 @@ def update_context(context_id):
 
 @app.route('/api/contexts/<int:context_id>', methods=['DELETE'])
 def delete_context(context_id):
-    global contexts, transactions
+    global contexts, transactions, todos
     
     context = next((c for c in contexts if c['id'] == context_id), None)
     
@@ -120,7 +162,9 @@ def delete_context(context_id):
             'message': 'Context not found'
         }), 404
     
+    # Delete all associated data
     transactions = [t for t in transactions if t['contextId'] != context_id]
+    todos = [t for t in todos if t['contextId'] != context_id]
     contexts = [c for c in contexts if c['id'] != context_id]
     
     return jsonify({
@@ -139,6 +183,7 @@ def get_context_overview(context_id):
         }), 404
     
     context_transactions = [t for t in transactions if t['contextId'] == context_id]
+    context_todos = [t for t in todos if t['contextId'] == context_id]
     
     total_income = sum(t['amount'] for t in context_transactions if t['type'] == 'income')
     total_expenses = sum(t['amount'] for t in context_transactions if t['type'] == 'expense')
@@ -155,13 +200,17 @@ def get_context_overview(context_id):
                 'total_expenses': round(total_expenses, 2),
                 'balance': round(balance, 2),
                 'transaction_count': len(context_transactions),
-                'todo_count': 0,
+                'todo_count': len(context_todos),
                 'idea_count': 0,
                 'event_count': 0
             },
             'recent_transactions': recent_transactions
         }
     }), 200
+
+# ============================================================================
+# TRANSACTION ENDPOINTS
+# ============================================================================
 
 @app.route('/api/transactions', methods=['GET'])
 def get_transactions():
@@ -210,8 +259,6 @@ def add_transaction():
     
     data = request.get_json()
     
-    print("Received transaction data:", data)  # Debug
-    
     if not data.get('amount') or not data.get('contextId'):
         return jsonify({
             'success': False,
@@ -225,7 +272,6 @@ def add_transaction():
             'message': 'Context not found'
         }), 404
     
-    # Ensure tags is always a list (even if empty)
     tags = data.get('tags', [])
     if tags is None:
         tags = []
@@ -235,12 +281,10 @@ def add_transaction():
         'contextId': data.get('contextId'),
         'type': data.get('type', 'expense'),
         'amount': float(data.get('amount')),
-        'tags': tags,  # This should be a list
+        'tags': tags,
         'description': data.get('description', ''),
         'date': data.get('date', datetime.now().strftime('%Y-%m-%d'))
     }
-    
-    print("Created transaction:", new_transaction)  # Debug
     
     transactions.insert(0, new_transaction)
     next_transaction_id += 1
@@ -250,6 +294,138 @@ def add_transaction():
         'data': new_transaction,
         'message': 'Transaction added successfully'
     }), 201
+
+@app.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
+def delete_transaction(transaction_id):
+    global transactions
+    
+    transaction = next((t for t in transactions if t['id'] == transaction_id), None)
+    
+    if not transaction:
+        return jsonify({
+            'success': False,
+            'message': 'Transaction not found'
+        }), 404
+    
+    transactions = [t for t in transactions if t['id'] != transaction_id]
+    
+    return jsonify({
+        'success': True,
+        'message': 'Transaction deleted successfully'
+    }), 200
+
+# ============================================================================
+# TODOS ENDPOINTS
+# ============================================================================
+
+@app.route('/api/contexts/<int:context_id>/todos', methods=['GET'])
+def get_context_todos(context_id):
+    context_todos = [t for t in todos if t['contextId'] == context_id]
+    
+    return jsonify({
+        'success': True,
+        'data': context_todos,
+        'count': len(context_todos)
+    }), 200
+
+@app.route('/api/todos', methods=['POST'])
+def add_todo():
+    global next_todo_id
+    
+    data = request.get_json()
+    
+    if not data.get('title') or not data.get('contextId'):
+        return jsonify({
+            'success': False,
+            'message': 'Title and context are required'
+        }), 400
+    
+    context = next((c for c in contexts if c['id'] == data.get('contextId')), None)
+    if not context:
+        return jsonify({
+            'success': False,
+            'message': 'Context not found'
+        }), 404
+    
+    tags = data.get('tags', [])
+    if tags is None:
+        tags = []
+    
+    new_todo = {
+        'id': next_todo_id,
+        'contextId': data.get('contextId'),
+        'title': data.get('title'),
+        'description': data.get('description', ''),
+        'status': data.get('status', 'todo'),
+        'priority': data.get('priority', 'medium'),
+        'dueDate': data.get('dueDate', ''),
+        'tags': tags,
+        'createdAt': datetime.now().strftime('%Y-%m-%d')
+    }
+    
+    todos.append(new_todo)
+    next_todo_id += 1
+    
+    return jsonify({
+        'success': True,
+        'data': new_todo,
+        'message': 'Todo added successfully'
+    }), 201
+
+@app.route('/api/todos/<int:todo_id>', methods=['PUT'])
+def update_todo(todo_id):
+    data = request.get_json()
+    
+    todo = next((t for t in todos if t['id'] == todo_id), None)
+    
+    if not todo:
+        return jsonify({
+            'success': False,
+            'message': 'Todo not found'
+        }), 404
+    
+    # Update only provided fields
+    if 'title' in data:
+        todo['title'] = data['title']
+    if 'description' in data:
+        todo['description'] = data['description']
+    if 'status' in data:
+        todo['status'] = data['status']
+    if 'priority' in data:
+        todo['priority'] = data['priority']
+    if 'dueDate' in data:
+        todo['dueDate'] = data['dueDate']
+    if 'tags' in data:
+        todo['tags'] = data['tags']
+    
+    return jsonify({
+        'success': True,
+        'data': todo,
+        'message': 'Todo updated successfully'
+    }), 200
+
+@app.route('/api/todos/<int:todo_id>', methods=['DELETE'])
+def delete_todo(todo_id):
+    global todos
+    
+    todo = next((t for t in todos if t['id'] == todo_id), None)
+    
+    if not todo:
+        return jsonify({
+            'success': False,
+            'message': 'Todo not found'
+        }), 404
+    
+    todos = [t for t in todos if t['id'] != todo_id]
+    
+    return jsonify({
+        'success': True,
+        'message': 'Todo deleted successfully'
+    }), 200
+
+# ============================================================================
+# STATS ENDPOINTS
+# ============================================================================
 
 @app.route('/api/stats/summary', methods=['GET'])
 def get_summary_stats():
@@ -309,7 +485,6 @@ def get_stats_by_tag():
     if context_id:
         filtered = [t for t in filtered if t['contextId'] == int(context_id)]
     
-    # Group expenses by tag
     tag_totals = {}
     untagged_total = 0
     
@@ -317,20 +492,16 @@ def get_stats_by_tag():
         if t['type'] == 'expense':
             tags = t.get('tags', [])
             if not tags or len(tags) == 0:
-                # Count untagged expenses
                 untagged_total += t['amount']
             else:
-                # Count tagged expenses
                 for tag in tags:
                     tag_totals[tag] = tag_totals.get(tag, 0) + t['amount']
     
-    # Build result array
     tag_data = [
         {'name': tag, 'value': round(amount, 2)}
         for tag, amount in tag_totals.items()
     ]
     
-    # Add "Others" for untagged if there are any
     if untagged_total > 0:
         tag_data.append({'name': 'Others (untagged)', 'value': round(untagged_total, 2)})
     
@@ -369,25 +540,6 @@ def get_daily_stats():
     return jsonify({
         'success': True,
         'data': daily_data
-    }), 200
-
-@app.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
-def delete_transaction(transaction_id):
-    global transactions
-    
-    transaction = next((t for t in transactions if t['id'] == transaction_id), None)
-    
-    if not transaction:
-        return jsonify({
-            'success': False,
-            'message': 'Transaction not found'
-        }), 404
-    
-    transactions = [t for t in transactions if t['id'] != transaction_id]
-    
-    return jsonify({
-        'success': True,
-        'message': 'Transaction deleted successfully'
     }), 200
 
 if __name__ == '__main__':

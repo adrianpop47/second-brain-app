@@ -8,7 +8,8 @@ const AddTransactionModal = ({
   setNewTransaction, 
   onAdd,
   contextId,
-  contexts = []
+  contexts = [],
+  isEditing = false
 }) => {
   const [tagInput, setTagInput] = useState('');
   const [showNegativeWarning, setShowNegativeWarning] = useState(false);
@@ -83,7 +84,9 @@ const AddTransactionModal = ({
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
         <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-semibold text-slate-800">Add Transaction</h3>
+          <h3 className="text-xl font-semibold text-slate-800">
+            {isEditing ? 'Edit Transaction' : 'Add Transaction'}
+          </h3>
           <button
             type="button"
             onClick={() => setShowModal(false)}
@@ -227,7 +230,7 @@ const AddTransactionModal = ({
             type="submit"
             className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
           >
-            Add Transaction
+            {isEditing ? 'Update Transaction' : 'Add Transaction'}
           </button>
         </form>
       </div>

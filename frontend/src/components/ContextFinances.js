@@ -27,6 +27,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
     date: new Date().toISOString().split('T')[0],
     contextId: context.id
   });
+  const [editingTransaction, setEditingTransaction] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -81,8 +82,13 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
 
       console.log('Sending transaction:', transactionToAdd); // DEBUG
 
-      const response = await apiService.addTransaction(transactionToAdd);
-      console.log('Backend response:', response); // DEBUG
+      if (editingTransaction) {
+        // Update existing transaction
+        await apiService.updateTransaction(editingTransaction.id, transactionToAdd);
+      } else {
+        // Add new transaction
+        await apiService.addTransaction(transactionToAdd);
+      }
 
       await fetchContextData();
       
@@ -95,11 +101,50 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
         date: new Date().toISOString().split('T')[0],
         contextId: context.id
       });
+      setEditingTransaction(null);
       setShowAddModal(false);
     } catch (err) {
-      console.error('Error adding transaction:', err);
-      alert('Failed to add transaction: ' + err.message);
+      console.error('Error saving transaction:', err);
+      alert('Failed to save transaction: ' + err.message);
     }
+  };
+
+  const handleEditTransaction = (transaction) => {
+    setEditingTransaction(transaction);
+    setNewTransaction({
+      type: transaction.type,
+      amount: transaction.amount.toString(),
+      tags: transaction.tags || [],
+      description: transaction.description,
+      date: transaction.date,
+      contextId: context.id
+    });
+    setShowAddModal(true);
+  };
+
+  const handleDeleteTransaction = async (transactionId) => {
+    if (window.confirm('Are you sure you want to delete this transaction?')) {
+      try {
+        await apiService.deleteTransaction(transactionId);
+        await fetchContextData();
+      } catch (err) {
+        console.error('Error deleting transaction:', err);
+        alert('Failed to delete transaction');
+      }
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setEditingTransaction(null);
+    setNewTransaction({
+      type: 'expense',
+      amount: '',
+      tags: [],
+      description: '',
+      date: new Date().toISOString().split('T')[0],
+      contextId: context.id
+    });
   };
 
   if (loading) {
@@ -167,16 +212,19 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
         visibleCount={visibleTransactions}
         setVisibleCount={setVisibleTransactions}
         totalCount={transactions.length}
+        onEdit={handleEditTransaction}
+        onDelete={handleDeleteTransaction}
       />
 
-      {/* Add Transaction Modal */}
+      {/* Add/Edit Transaction Modal */}
       <AddTransactionModal 
         showModal={showAddModal}
-        setShowModal={setShowAddModal}
+        setShowModal={handleCloseModal}
         newTransaction={newTransaction}
         setNewTransaction={setNewTransaction}
         onAdd={addTransaction}
         contextId={context.id}
+        isEditing={!!editingTransaction}
       />
     </div>
   );
