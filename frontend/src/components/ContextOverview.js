@@ -1,6 +1,19 @@
+import { useState } from 'react';
 import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, Wallet, Plus } from 'lucide-react';
+import AddTransactionModal from './AddTransactionModal';
+import apiService from '../services/apiService';
 
-const ContextOverview = ({ context, stats, recentTransactions, loading }) => {
+const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUpdate }) => {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTransaction, setNewTransaction] = useState({
+    type: 'expense',
+    amount: '',
+    tags: [],
+    description: '',
+    date: new Date().toISOString().split('T')[0],
+    contextId: context.id
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -8,6 +21,45 @@ const ContextOverview = ({ context, stats, recentTransactions, loading }) => {
       </div>
     );
   }
+
+  const addTransaction = async () => {
+    if (!newTransaction.amount) {
+      alert('Amount is required');
+      return;
+    }
+    
+    try {
+      const transactionToAdd = {
+        type: newTransaction.type,
+        amount: parseFloat(newTransaction.amount),
+        description: newTransaction.description,
+        tags: Array.isArray(newTransaction.tags) ? newTransaction.tags : [],
+        date: newTransaction.date,
+        contextId: context.id
+      };
+
+      await apiService.addTransaction(transactionToAdd);
+
+      // Trigger data refresh in parent
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+      
+      // Reset form
+      setNewTransaction({
+        type: 'expense',
+        amount: '',
+        tags: [],
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        contextId: context.id
+      });
+      setShowAddModal(false);
+    } catch (err) {
+      console.error('Error adding transaction:', err);
+      alert('Failed to add transaction: ' + err.message);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -147,8 +199,11 @@ const ContextOverview = ({ context, stats, recentTransactions, loading }) => {
 
       {/* Quick Actions - Consistent button colors */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Primary action button - indigo */}
-        <button className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow">
+        {/* Primary action button - indigo - NOW CLICKABLE */}
+        <button 
+          onClick={() => setShowAddModal(true)}
+          className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow"
+        >
           <Plus size={20} className="mb-2" />
           <p className="text-sm font-medium">Add Transaction</p>
         </button>
@@ -172,6 +227,16 @@ const ContextOverview = ({ context, stats, recentTransactions, loading }) => {
           <p className="text-xs mt-1">Soon</p>
         </button>
       </div>
+
+      {/* Add Transaction Modal */}
+      <AddTransactionModal 
+        showModal={showAddModal}
+        setShowModal={setShowAddModal}
+        newTransaction={newTransaction}
+        setNewTransaction={setNewTransaction}
+        onAdd={addTransaction}
+        contextId={context.id}
+      />
     </div>
   );
 };
