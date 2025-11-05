@@ -1,10 +1,27 @@
 services:
+  db:
+    image: postgres:16
+    container_name: secondbrain-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: secondbrain
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
   backend:
     build: ./backend
+    container_name: secondbrain-backend
     ports:
       - "5050:5000"
     environment:
       - FLASK_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/secondbrain
+    depends_on:
+      - db
     volumes:
       - ./backend:/app
 
@@ -14,9 +31,13 @@ services:
       context: ./frontend
       args:
         API_URL: http://localhost:5050/api
+    container_name: secondbrain-frontend
     ports:
       - "3000:80"
     volumes:
       - ./frontend:/app
     depends_on:
       - backend
+
+volumes:
+  db_data:

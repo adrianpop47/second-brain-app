@@ -3,8 +3,7 @@ import { X, Flag, Tag as TagIcon } from 'lucide-react';
 
 const AddTodoModal = ({ 
   showModal, 
-  setShowModal, 
-  contextId,
+  setShowModal,
   onAdd 
 }) => {
   const [newTodo, setNewTodo] = useState({
