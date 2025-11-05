@@ -1,76 +1,39 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from datetime import datetime, timedelta
-import random
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
+# Import database and models
+from models import db, Context, Transaction, Todo
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
 
-# Dummy data storage (in-memory for now)
-contexts = [
-    {'id': 1, 'name': 'Business', 'emoji': 'Briefcase', 'color': '#000000', 'createdAt': '2025-10-01'},
-    {'id': 2, 'name': 'Fitness', 'emoji': 'Dumbbell', 'color': '#000000', 'createdAt': '2025-10-01'},
-    {'id': 3, 'name': 'Health', 'emoji': 'Heart', 'color': '#000000', 'createdAt': '2025-10-01'},
-]
+# Configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
 
-transactions = [
-    {'id': 1, 'contextId': 1, 'type': 'expense', 'amount': 45.50, 'tags': ['software', 'monthly'], 'description': 'Software subscription', 'date': '2025-10-25'},
-    {'id': 2, 'contextId': 1, 'type': 'income', 'amount': 2500, 'tags': ['salary', 'monthly'], 'description': 'Monthly salary', 'date': '2025-10-24'},
-    {'id': 3, 'contextId': 1, 'type': 'expense', 'amount': 120, 'tags': ['rent', 'office'], 'description': 'Office rent', 'date': '2025-10-23'},
-    {'id': 4, 'contextId': 2, 'type': 'expense', 'amount': 85, 'tags': ['gym', 'membership'], 'description': 'Gym membership', 'date': '2025-10-22'},
-    {'id': 5, 'contextId': 1, 'type': 'income', 'amount': 200, 'tags': ['client', 'project'], 'description': 'Web design project', 'date': '2025-10-21'},
-    {'id': 6, 'contextId': 2, 'type': 'expense', 'amount': 60, 'tags': ['supplements'], 'description': 'Protein powder', 'date': '2025-10-20'},
-    {'id': 7, 'contextId': 3, 'type': 'expense', 'amount': 150, 'tags': ['doctor', 'checkup'], 'description': 'Doctor visit', 'date': '2025-10-19'},
-    {'id': 8, 'contextId': 1, 'type': 'income', 'amount': 500, 'tags': ['client', 'project'], 'description': 'Design project', 'date': '2025-10-18'},
-]
+# Initialize extensions
+CORS(app)
+db.init_app(app)
 
-# Todos storage
-todos = [
-    {
-        'id': 1,
-        'contextId': 1,
-        'title': 'Complete project proposal',
-        'description': 'Write and submit the Q4 project proposal to the client',
-        'status': 'todo',
-        'priority': 'high',
-        'dueDate': '2025-11-15',
-        'tags': ['client', 'urgent'],
-        'createdAt': '2025-11-01'
-    },
-    {
-        'id': 2,
-        'contextId': 1,
-        'title': 'Review team performance',
-        'description': 'Schedule 1-on-1 meetings with team members',
-        'status': 'in_progress',
-        'priority': 'medium',
-        'dueDate': '2025-11-10',
-        'tags': ['management', 'team'],
-        'createdAt': '2025-11-01'
-    },
-    {
-        'id': 3,
-        'contextId': 2,
-        'title': 'Morning workout routine',
-        'description': '30 minutes cardio + strength training',
-        'status': 'done',
-        'priority': 'high',
-        'dueDate': '2025-11-04',
-        'tags': ['daily', 'health'],
-        'createdAt': '2025-10-28'
-    },
-]
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
 
-# ID counters to prevent collisions
-next_context_id = 4
-next_transaction_id = 9
-next_todo_id = 4
-
-def filter_transactions_by_range(date_range):
-    now = datetime.now()
-    
+def filter_transactions_by_range(transactions, date_range):
+    """Filter transactions by date range"""
     if date_range == 'all':
         return transactions
+    
+    now = datetime.now()
     
     if date_range == 'week':
         cutoff = now - timedelta(days=7)
@@ -81,11 +44,43 @@ def filter_transactions_by_range(date_range):
     else:
         return transactions
     
-    return [t for t in transactions if datetime.strptime(t['date'], '%Y-%m-%d') >= cutoff]
+    # Handle both dict and model objects
+    filtered = []
+    for t in transactions:
+        if isinstance(t, dict):
+            # Already converted to dict
+            trans_date = datetime.strptime(t['date'], '%Y-%m-%d')
+        else:
+            # Model object
+            trans_date = datetime.combine(t.date, datetime.min.time())
+        
+        if trans_date >= cutoff:
+            filtered.append(t)
+    
+    return filtered
+
+
+# ============================================================================
+# HEALTH CHECK
+# ============================================================================
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return jsonify({'status': 'healthy', 'message': 'Flask API is running'}), 200
+    try:
+        # Test database connection
+        db.session.execute(db.text('SELECT 1'))
+        return jsonify({
+            'status': 'healthy', 
+            'message': 'Flask API is running',
+            'database': 'connected'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'message': 'Database connection failed',
+            'error': str(e)
+        }), 500
+
 
 # ============================================================================
 # CONTEXT ENDPOINTS
@@ -93,120 +88,163 @@ def health_check():
 
 @app.route('/api/contexts', methods=['GET'])
 def get_contexts():
-    return jsonify({
-        'success': True,
-        'data': contexts,
-        'count': len(contexts)
-    }), 200
+    try:
+        contexts = Context.query.order_by(Context.created_at).all()
+        return jsonify({
+            'success': True,
+            'data': [context.to_dict() for context in contexts],
+            'count': len(contexts)
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching contexts: {str(e)}'
+        }), 500
+
 
 @app.route('/api/contexts', methods=['POST'])
 def create_context():
-    global next_context_id
-    
-    data = request.get_json()
-    
-    if not data.get('name'):
+    try:
+        data = request.get_json()
+        
+        if not data.get('name'):
+            return jsonify({
+                'success': False,
+                'message': 'Context name is required'
+            }), 400
+        
+        new_context = Context(
+            name=data.get('name'),
+            emoji=data.get('emoji', 'Briefcase'),
+            color=data.get('color', '#000000')
+        )
+        
+        db.session.add(new_context)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': new_context.to_dict(),
+            'message': 'Context created successfully'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Context name is required'
-        }), 400
-    
-    new_context = {
-        'id': next_context_id,
-        'name': data.get('name'),
-        'emoji': data.get('emoji', 'Briefcase'),
-        'color': data.get('color', '#000000'),
-        'createdAt': datetime.now().strftime('%Y-%m-%d')
-    }
-    
-    contexts.append(new_context)
-    next_context_id += 1
-    
-    return jsonify({
-        'success': True,
-        'data': new_context,
-        'message': 'Context created successfully'
-    }), 201
+            'message': f'Error creating context: {str(e)}'
+        }), 500
+
 
 @app.route('/api/contexts/<int:context_id>', methods=['PUT'])
 def update_context(context_id):
-    data = request.get_json()
-    
-    context = next((c for c in contexts if c['id'] == context_id), None)
-    
-    if not context:
+    try:
+        context = Context.query.get(context_id)
+        
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Context not found'
+            }), 404
+        
+        data = request.get_json()
+        
+        context.name = data.get('name', context.name)
+        context.emoji = data.get('emoji', context.emoji)
+        context.color = data.get('color', context.color)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': context.to_dict(),
+            'message': 'Context updated successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Context not found'
-        }), 404
-    
-    context['name'] = data.get('name', context['name'])
-    context['emoji'] = data.get('emoji', context['emoji'])
-    context['color'] = data.get('color', context['color'])
-    
-    return jsonify({
-        'success': True,
-        'data': context,
-        'message': 'Context updated successfully'
-    }), 200
+            'message': f'Error updating context: {str(e)}'
+        }), 500
+
 
 @app.route('/api/contexts/<int:context_id>', methods=['DELETE'])
 def delete_context(context_id):
-    global contexts, transactions, todos
-    
-    context = next((c for c in contexts if c['id'] == context_id), None)
-    
-    if not context:
+    try:
+        context = Context.query.get(context_id)
+        
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Context not found'
+            }), 404
+        
+        db.session.delete(context)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Context deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Context not found'
-        }), 404
-    
-    # Delete all associated data
-    transactions = [t for t in transactions if t['contextId'] != context_id]
-    todos = [t for t in todos if t['contextId'] != context_id]
-    contexts = [c for c in contexts if c['id'] != context_id]
-    
-    return jsonify({
-        'success': True,
-        'message': 'Context deleted successfully'
-    }), 200
+            'message': f'Error deleting context: {str(e)}'
+        }), 500
+
 
 @app.route('/api/contexts/<int:context_id>/overview', methods=['GET'])
 def get_context_overview(context_id):
-    context = next((c for c in contexts if c['id'] == context_id), None)
-    
-    if not context:
+    try:
+        context = Context.query.get(context_id)
+        
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Context not found'
+            }), 404
+        
+        # Get transactions
+        transactions = Transaction.query.filter_by(context_id=context_id).all()
+        transaction_dicts = [t.to_dict() for t in transactions]
+        
+        # Calculate stats
+        total_income = sum(t.amount for t in transactions if t.type == 'income')
+        total_expenses = sum(t.amount for t in transactions if t.type == 'expense')
+        balance = total_income - total_expenses
+        
+        # Get todos
+        todos = Todo.query.filter_by(context_id=context_id).all()
+        
+        # Get recent transactions (last 5)
+        recent_transactions = sorted(transaction_dicts, key=lambda x: x['date'], reverse=True)[:5]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'context': context.to_dict(),
+                'stats': {
+                    'total_income': round(total_income, 2),
+                    'total_expenses': round(total_expenses, 2),
+                    'balance': round(balance, 2),
+                    'transaction_count': len(transactions),
+                    'todo_count': len(todos),
+                    'idea_count': 0,  # TODO: Implement when ideas are added
+                    'event_count': 0  # TODO: Implement when events are added
+                },
+                'recent_transactions': recent_transactions
+            }
+        }), 200
+        
+    except Exception as e:
         return jsonify({
             'success': False,
-            'message': 'Context not found'
-        }), 404
-    
-    context_transactions = [t for t in transactions if t['contextId'] == context_id]
-    context_todos = [t for t in todos if t['contextId'] == context_id]
-    
-    total_income = sum(t['amount'] for t in context_transactions if t['type'] == 'income')
-    total_expenses = sum(t['amount'] for t in context_transactions if t['type'] == 'expense')
-    balance = total_income - total_expenses
-    
-    recent_transactions = sorted(context_transactions, key=lambda x: x['date'], reverse=True)[:5]
-    
-    return jsonify({
-        'success': True,
-        'data': {
-            'context': context,
-            'stats': {
-                'total_income': round(total_income, 2),
-                'total_expenses': round(total_expenses, 2),
-                'balance': round(balance, 2),
-                'transaction_count': len(context_transactions),
-                'todo_count': len(context_todos),
-                'idea_count': 0,
-                'event_count': 0
-            },
-            'recent_transactions': recent_transactions
-        }
-    }), 200
+            'message': f'Error fetching overview: {str(e)}'
+        }), 500
+
 
 # ============================================================================
 # TRANSACTION ENDPOINTS
@@ -214,105 +252,177 @@ def get_context_overview(context_id):
 
 @app.route('/api/transactions', methods=['GET'])
 def get_transactions():
-    date_range = request.args.get('range', 'all')
-    context_id = request.args.get('contextId', None)
-    
-    filtered = filter_transactions_by_range(date_range)
-    
-    if context_id:
-        filtered = [t for t in filtered if t['contextId'] == int(context_id)]
-    
-    return jsonify({
-        'success': True,
-        'data': filtered,
-        'count': len(filtered)
-    }), 200
+    try:
+        date_range = request.args.get('range', 'all')
+        context_id = request.args.get('contextId', None)
+        
+        query = Transaction.query
+        
+        if context_id:
+            query = query.filter_by(context_id=int(context_id))
+        
+        transactions = query.order_by(Transaction.date.desc()).all()
+        transaction_dicts = [t.to_dict() for t in transactions]
+        
+        # Filter by date range
+        filtered = filter_transactions_by_range(transaction_dicts, date_range)
+        
+        return jsonify({
+            'success': True,
+            'data': filtered,
+            'count': len(filtered)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching transactions: {str(e)}'
+        }), 500
+
 
 @app.route('/api/contexts/<int:context_id>/transactions', methods=['GET'])
 def get_context_transactions(context_id):
-    date_range = request.args.get('range', 'all')
-    
-    context_transactions = [t for t in transactions if t['contextId'] == context_id]
-    
-    if date_range != 'all':
-        now = datetime.now()
-        if date_range == 'week':
-            cutoff = now - timedelta(days=7)
-        elif date_range == 'month':
-            cutoff = now - timedelta(days=30)
-        elif date_range == 'year':
-            cutoff = now - timedelta(days=365)
-        else:
-            cutoff = now
+    try:
+        date_range = request.args.get('range', 'all')
         
-        context_transactions = [t for t in context_transactions if datetime.strptime(t['date'], '%Y-%m-%d') >= cutoff]
-    
-    return jsonify({
-        'success': True,
-        'data': context_transactions,
-        'count': len(context_transactions)
-    }), 200
+        transactions = Transaction.query.filter_by(context_id=context_id).order_by(Transaction.date.desc()).all()
+        transaction_dicts = [t.to_dict() for t in transactions]
+        
+        # Filter by date range
+        filtered = filter_transactions_by_range(transaction_dicts, date_range)
+        
+        return jsonify({
+            'success': True,
+            'data': filtered,
+            'count': len(filtered)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching transactions: {str(e)}'
+        }), 500
+
 
 @app.route('/api/transactions', methods=['POST'])
 def add_transaction():
-    global next_transaction_id
-    
-    data = request.get_json()
-    
-    if not data.get('amount') or not data.get('contextId'):
+    try:
+        data = request.get_json()
+        
+        if not data.get('amount') or not data.get('contextId'):
+            return jsonify({
+                'success': False,
+                'message': 'Amount and context are required'
+            }), 400
+        
+        # Verify context exists
+        context = Context.query.get(data.get('contextId'))
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Context not found'
+            }), 404
+        
+        # Parse date
+        date_str = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+        
+        new_transaction = Transaction(
+            context_id=data.get('contextId'),
+            type=data.get('type', 'expense'),
+            amount=float(data.get('amount')),
+            description=data.get('description', ''),
+            tags=data.get('tags', []),
+            date=date_obj
+        )
+        
+        db.session.add(new_transaction)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': new_transaction.to_dict(),
+            'message': 'Transaction added successfully'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Amount and context are required'
-        }), 400
-    
-    context = next((c for c in contexts if c['id'] == data.get('contextId')), None)
-    if not context:
+            'message': f'Error adding transaction: {str(e)}'
+        }), 500
+
+
+@app.route('/api/transactions/<int:transaction_id>', methods=['PUT'])
+def update_transaction(transaction_id):
+    try:
+        transaction = Transaction.query.get(transaction_id)
+        
+        if not transaction:
+            return jsonify({
+                'success': False,
+                'message': 'Transaction not found'
+            }), 404
+        
+        data = request.get_json()
+        
+        # Update only provided fields
+        if 'type' in data:
+            transaction.type = data['type']
+        if 'amount' in data:
+            transaction.amount = float(data['amount'])
+        if 'description' in data:
+            transaction.description = data['description']
+        if 'tags' in data:
+            transaction.tags = data['tags']
+        if 'date' in data:
+            try:
+                transaction.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            except:
+                pass
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': transaction.to_dict(),
+            'message': 'Transaction updated successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Context not found'
-        }), 404
-    
-    tags = data.get('tags', [])
-    if tags is None:
-        tags = []
-    
-    new_transaction = {
-        'id': next_transaction_id,
-        'contextId': data.get('contextId'),
-        'type': data.get('type', 'expense'),
-        'amount': float(data.get('amount')),
-        'tags': tags,
-        'description': data.get('description', ''),
-        'date': data.get('date', datetime.now().strftime('%Y-%m-%d'))
-    }
-    
-    transactions.insert(0, new_transaction)
-    next_transaction_id += 1
-    
-    return jsonify({
-        'success': True,
-        'data': new_transaction,
-        'message': 'Transaction added successfully'
-    }), 201
+            'message': f'Error updating transaction: {str(e)}'
+        }), 500
+
 
 @app.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
 def delete_transaction(transaction_id):
-    global transactions
-    
-    transaction = next((t for t in transactions if t['id'] == transaction_id), None)
-    
-    if not transaction:
+    try:
+        transaction = Transaction.query.get(transaction_id)
+        
+        if not transaction:
+            return jsonify({
+                'success': False,
+                'message': 'Transaction not found'
+            }), 404
+        
+        db.session.delete(transaction)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Transaction deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Transaction not found'
-        }), 404
-    
-    transactions = [t for t in transactions if t['id'] != transaction_id]
-    
-    return jsonify({
-        'success': True,
-        'message': 'Transaction deleted successfully'
-    }), 200
+            'message': f'Error deleting transaction: {str(e)}'
+        }), 500
+
 
 # ============================================================================
 # TODOS ENDPOINTS
@@ -320,108 +430,151 @@ def delete_transaction(transaction_id):
 
 @app.route('/api/contexts/<int:context_id>/todos', methods=['GET'])
 def get_context_todos(context_id):
-    context_todos = [t for t in todos if t['contextId'] == context_id]
-    
-    return jsonify({
-        'success': True,
-        'data': context_todos,
-        'count': len(context_todos)
-    }), 200
+    try:
+        todos = Todo.query.filter_by(context_id=context_id).order_by(Todo.created_at.desc()).all()
+        
+        return jsonify({
+            'success': True,
+            'data': [todo.to_dict() for todo in todos],
+            'count': len(todos)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching todos: {str(e)}'
+        }), 500
+
 
 @app.route('/api/todos', methods=['POST'])
 def add_todo():
-    global next_todo_id
-    
-    data = request.get_json()
-    
-    if not data.get('title') or not data.get('contextId'):
+    try:
+        data = request.get_json()
+        
+        if not data.get('title') or not data.get('contextId'):
+            return jsonify({
+                'success': False,
+                'message': 'Title and context are required'
+            }), 400
+        
+        # Verify context exists
+        context = Context.query.get(data.get('contextId'))
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Context not found'
+            }), 404
+        
+        # Parse due date if provided
+        due_date = None
+        if data.get('dueDate'):
+            try:
+                due_date = datetime.strptime(data.get('dueDate'), '%Y-%m-%d').date()
+            except:
+                pass
+        
+        new_todo = Todo(
+            context_id=data.get('contextId'),
+            title=data.get('title'),
+            description=data.get('description', ''),
+            status=data.get('status', 'todo'),
+            priority=data.get('priority', 'medium'),
+            due_date=due_date,
+            tags=data.get('tags', [])
+        )
+        
+        db.session.add(new_todo)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': new_todo.to_dict(),
+            'message': 'Todo added successfully'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Title and context are required'
-        }), 400
-    
-    context = next((c for c in contexts if c['id'] == data.get('contextId')), None)
-    if not context:
-        return jsonify({
-            'success': False,
-            'message': 'Context not found'
-        }), 404
-    
-    tags = data.get('tags', [])
-    if tags is None:
-        tags = []
-    
-    new_todo = {
-        'id': next_todo_id,
-        'contextId': data.get('contextId'),
-        'title': data.get('title'),
-        'description': data.get('description', ''),
-        'status': data.get('status', 'todo'),
-        'priority': data.get('priority', 'medium'),
-        'dueDate': data.get('dueDate', ''),
-        'tags': tags,
-        'createdAt': datetime.now().strftime('%Y-%m-%d')
-    }
-    
-    todos.append(new_todo)
-    next_todo_id += 1
-    
-    return jsonify({
-        'success': True,
-        'data': new_todo,
-        'message': 'Todo added successfully'
-    }), 201
+            'message': f'Error adding todo: {str(e)}'
+        }), 500
+
 
 @app.route('/api/todos/<int:todo_id>', methods=['PUT'])
 def update_todo(todo_id):
-    data = request.get_json()
-    
-    todo = next((t for t in todos if t['id'] == todo_id), None)
-    
-    if not todo:
+    try:
+        todo = Todo.query.get(todo_id)
+        
+        if not todo:
+            return jsonify({
+                'success': False,
+                'message': 'Todo not found'
+            }), 404
+        
+        data = request.get_json()
+        
+        # Update only provided fields
+        if 'title' in data:
+            todo.title = data['title']
+        if 'description' in data:
+            todo.description = data['description']
+        if 'status' in data:
+            todo.status = data['status']
+        if 'priority' in data:
+            todo.priority = data['priority']
+        if 'tags' in data:
+            todo.tags = data['tags']
+        if 'dueDate' in data:
+            if data['dueDate']:
+                try:
+                    todo.due_date = datetime.strptime(data['dueDate'], '%Y-%m-%d').date()
+                except:
+                    pass
+            else:
+                todo.due_date = None
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': todo.to_dict(),
+            'message': 'Todo updated successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Todo not found'
-        }), 404
-    
-    # Update only provided fields
-    if 'title' in data:
-        todo['title'] = data['title']
-    if 'description' in data:
-        todo['description'] = data['description']
-    if 'status' in data:
-        todo['status'] = data['status']
-    if 'priority' in data:
-        todo['priority'] = data['priority']
-    if 'dueDate' in data:
-        todo['dueDate'] = data['dueDate']
-    if 'tags' in data:
-        todo['tags'] = data['tags']
-    
-    return jsonify({
-        'success': True,
-        'data': todo,
-        'message': 'Todo updated successfully'
-    }), 200
+            'message': f'Error updating todo: {str(e)}'
+        }), 500
+
 
 @app.route('/api/todos/<int:todo_id>', methods=['DELETE'])
 def delete_todo(todo_id):
-    global todos
-    
-    todo = next((t for t in todos if t['id'] == todo_id), None)
-    
-    if not todo:
+    try:
+        todo = Todo.query.get(todo_id)
+        
+        if not todo:
+            return jsonify({
+                'success': False,
+                'message': 'Todo not found'
+            }), 404
+        
+        db.session.delete(todo)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Todo deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Todo not found'
-        }), 404
-    
-    todos = [t for t in todos if t['id'] != todo_id]
-    
-    return jsonify({
-        'success': True,
-        'message': 'Todo deleted successfully'
-    }), 200
+            'message': f'Error deleting todo: {str(e)}'
+        }), 500
+
 
 # ============================================================================
 # STATS ENDPOINTS
@@ -429,118 +582,175 @@ def delete_todo(todo_id):
 
 @app.route('/api/stats/summary', methods=['GET'])
 def get_summary_stats():
-    date_range = request.args.get('range', 'all')
-    context_id = request.args.get('contextId', None)
-    
-    filtered = filter_transactions_by_range(date_range)
-    
-    if context_id:
-        filtered = [t for t in filtered if t['contextId'] == int(context_id)]
-    
-    total_income = sum(t['amount'] for t in filtered if t['type'] == 'income')
-    total_expenses = sum(t['amount'] for t in filtered if t['type'] == 'expense')
-    balance = total_income - total_expenses
-    
-    return jsonify({
-        'success': True,
-        'data': {
-            'total_income': round(total_income, 2),
-            'total_expenses': round(total_expenses, 2),
-            'balance': round(balance, 2)
-        }
-    }), 200
+    try:
+        date_range = request.args.get('range', 'all')
+        context_id = request.args.get('contextId', None)
+        
+        query = Transaction.query
+        
+        if context_id:
+            query = query.filter_by(context_id=int(context_id))
+        
+        transactions = query.all()
+        transaction_dicts = [t.to_dict() for t in transactions]
+        
+        # Filter by date range
+        filtered = filter_transactions_by_range(transaction_dicts, date_range)
+        
+        total_income = sum(t['amount'] for t in filtered if t['type'] == 'income')
+        total_expenses = sum(t['amount'] for t in filtered if t['type'] == 'expense')
+        balance = total_income - total_expenses
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_income': round(total_income, 2),
+                'total_expenses': round(total_expenses, 2),
+                'balance': round(balance, 2)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching summary: {str(e)}'
+        }), 500
+
 
 @app.route('/api/stats/by-context', methods=['GET'])
 def get_stats_by_context():
-    date_range = request.args.get('range', 'all')
-    filtered = filter_transactions_by_range(date_range)
-    
-    context_totals = {}
-    for t in filtered:
-        if t['type'] == 'expense':
-            context = next((c for c in contexts if c['id'] == t['contextId']), None)
-            if context:
-                context_name = context['name']
-                context_totals[context_name] = context_totals.get(context_name, 0) + t['amount']
-    
-    context_data = [
-        {'name': context, 'value': round(amount, 2)}
-        for context, amount in context_totals.items()
-    ]
-    
-    context_data.sort(key=lambda x: x['value'], reverse=True)
-    
-    return jsonify({
-        'success': True,
-        'data': context_data
-    }), 200
+    try:
+        date_range = request.args.get('range', 'all')
+        
+        contexts = Context.query.all()
+        transactions = Transaction.query.filter_by(type='expense').all()
+        transaction_dicts = [t.to_dict() for t in transactions]
+        
+        # Filter by date range
+        filtered = filter_transactions_by_range(transaction_dicts, date_range)
+        
+        # Group by context
+        context_totals = {}
+        context_map = {c.id: c.name for c in contexts}
+        
+        for t in filtered:
+            context_name = context_map.get(t['contextId'], 'Unknown')
+            context_totals[context_name] = context_totals.get(context_name, 0) + t['amount']
+        
+        context_data = [
+            {'name': context, 'value': round(amount, 2)}
+            for context, amount in context_totals.items()
+        ]
+        
+        context_data.sort(key=lambda x: x['value'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': context_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching context stats: {str(e)}'
+        }), 500
+
 
 @app.route('/api/stats/by-tag', methods=['GET'])
 def get_stats_by_tag():
-    date_range = request.args.get('range', 'all')
-    context_id = request.args.get('contextId', None)
-    
-    filtered = filter_transactions_by_range(date_range)
-    
-    if context_id:
-        filtered = [t for t in filtered if t['contextId'] == int(context_id)]
-    
-    tag_totals = {}
-    untagged_total = 0
-    
-    for t in filtered:
-        if t['type'] == 'expense':
+    try:
+        date_range = request.args.get('range', 'all')
+        context_id = request.args.get('contextId', None)
+        
+        query = Transaction.query.filter_by(type='expense')
+        
+        if context_id:
+            query = query.filter_by(context_id=int(context_id))
+        
+        transactions = query.all()
+        transaction_dicts = [t.to_dict() for t in transactions]
+        
+        # Filter by date range
+        filtered = filter_transactions_by_range(transaction_dicts, date_range)
+        
+        # Group by tag
+        tag_totals = {}
+        untagged_total = 0
+        
+        for t in filtered:
             tags = t.get('tags', [])
             if not tags or len(tags) == 0:
                 untagged_total += t['amount']
             else:
                 for tag in tags:
                     tag_totals[tag] = tag_totals.get(tag, 0) + t['amount']
-    
-    tag_data = [
-        {'name': tag, 'value': round(amount, 2)}
-        for tag, amount in tag_totals.items()
-    ]
-    
-    if untagged_total > 0:
-        tag_data.append({'name': 'Others (untagged)', 'value': round(untagged_total, 2)})
-    
-    tag_data.sort(key=lambda x: x['value'], reverse=True)
-    
-    return jsonify({
-        'success': True,
-        'data': tag_data
-    }), 200
+        
+        tag_data = [
+            {'name': tag, 'value': round(amount, 2)}
+            for tag, amount in tag_totals.items()
+        ]
+        
+        if untagged_total > 0:
+            tag_data.append({'name': 'Others (untagged)', 'value': round(untagged_total, 2)})
+        
+        tag_data.sort(key=lambda x: x['value'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': tag_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching tag stats: {str(e)}'
+        }), 500
+
 
 @app.route('/api/stats/daily', methods=['GET'])
 def get_daily_stats():
-    date_range = request.args.get('range', 'all')
-    context_id = request.args.get('contextId', None)
-    
-    filtered = filter_transactions_by_range(date_range)
-    
-    if context_id:
-        filtered = [t for t in filtered if t['contextId'] == int(context_id)]
-    
-    daily_totals = {}
-    for t in filtered:
-        date_obj = datetime.strptime(t['date'], '%Y-%m-%d')
-        date_key = date_obj.strftime('%b %d')
+    try:
+        date_range = request.args.get('range', 'all')
+        context_id = request.args.get('contextId', None)
         
-        if date_key not in daily_totals:
-            daily_totals[date_key] = {'date': date_key, 'expenses': 0, 'income': 0}
+        query = Transaction.query
         
-        if t['type'] == 'expense':
-            daily_totals[date_key]['expenses'] += t['amount']
-        else:
-            daily_totals[date_key]['income'] += t['amount']
-    
-    daily_data = list(daily_totals.values())
-    
-    return jsonify({
-        'success': True,
-        'data': daily_data
-    }), 200
+        if context_id:
+            query = query.filter_by(context_id=int(context_id))
+        
+        transactions = query.all()
+        transaction_dicts = [t.to_dict() for t in transactions]
+        
+        # Filter by date range
+        filtered = filter_transactions_by_range(transaction_dicts, date_range)
+        
+        # Group by date
+        daily_totals = {}
+        for t in filtered:
+            date_obj = datetime.strptime(t['date'], '%Y-%m-%d')
+            date_key = date_obj.strftime('%b %d')
+            
+            if date_key not in daily_totals:
+                daily_totals[date_key] = {'date': date_key, 'expenses': 0, 'income': 0}
+            
+            if t['type'] == 'expense':
+                daily_totals[date_key]['expenses'] += t['amount']
+            else:
+                daily_totals[date_key]['income'] += t['amount']
+        
+        daily_data = list(daily_totals.values())
+        
+        return jsonify({
+            'success': True,
+            'data': daily_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching daily stats: {str(e)}'
+        }), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

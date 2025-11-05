@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, BarChart3, CheckSquare, Lightbulb, Calendar } from 'lucide-react';
+import { Menu, BarChart3, Lightbulb, Calendar } from 'lucide-react';
 import ContextSidebar from './components/ContextSidebar';
 import ContextSettingsModal from './components/ContextSettingsModal';
 import ContextOverview from './components/ContextOverview';
@@ -40,7 +40,7 @@ const SecondBrainApp = () => {
     fetchContexts();
   }, []);
 
-  // Fetch home data when dateRange changes
+  // Fetch home data when dateRange changes OR when returning to home
   useEffect(() => {
     if (activeView.type === 'home') {
       fetchHomeData();
@@ -169,11 +169,15 @@ const SecondBrainApp = () => {
     }
   };
 
-  // Handler for when data is updated in ContextOverview
-  const handleContextDataUpdate = () => {
+  // Handler for when data is updated in ContextOverview - REFRESH EVERYTHING
+  const handleContextDataUpdate = async () => {
+    // Refresh context overview data
     if (activeView.type === 'context' && activeView.contextId) {
-      fetchContextOverview(activeView.contextId);
+      await fetchContextOverview(activeView.contextId);
     }
+    
+    // ALSO refresh home data so it shows in Home view
+    await fetchHomeData();
   };
 
   // Render loading state
@@ -357,24 +361,26 @@ const SecondBrainApp = () => {
 
         {/* Main content */}
         <div className={`flex-1 flex flex-col overflow-hidden ${(showSettingsModal || showAddContextModal) ? 'pointer-events-none' : ''}`}>
-          {/* Sticky header bar with hamburger menu */}
+          {/* Sticky header with menu button */}
           {!sidebarOpen && (
-            <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/50 px-6 py-3 md:px-8 shadow-sm">
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <Menu size={24} className="text-slate-600" />
-              </button>
+            <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/50">
+              <div className="p-4">
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <Menu size={24} className="text-slate-600" />
+                </button>
+              </div>
             </div>
           )}
-          
-          {/* Scrollable content area */}
+
+          {/* Scrollable main content */}
           <div className="flex-1 overflow-auto">
             <div className="p-6 md:p-8">
               <div className="max-w-6xl mx-auto">
-                {/* Main content area */}
                 {renderMainContent()}
+              </div>
             </div>
           </div>
         </div>
@@ -397,7 +403,6 @@ const SecondBrainApp = () => {
         onSave={handleSaveContext}
         onDelete={() => {}}
       />
-    </div>
     </div>
   );
 };

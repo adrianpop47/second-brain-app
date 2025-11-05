@@ -51,7 +51,6 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
         apiService.getDailyStats(dateRange, context.id)
       ]);
 
-      console.log('Fetched transactions:', transactionsRes.data); // DEBUG
       setTransactions(transactionsRes.data);
       setSummaryStats(summaryRes.data);
       setTagData(tagRes.data);
@@ -80,19 +79,18 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
         contextId: context.id
       };
 
-      console.log('Sending transaction:', transactionToAdd); // DEBUG
-
       if (editingTransaction) {
-        // Update existing transaction
+        // Update existing transaction - use updateTransaction endpoint
         await apiService.updateTransaction(editingTransaction.id, transactionToAdd);
       } else {
         // Add new transaction
         await apiService.addTransaction(transactionToAdd);
       }
 
+      // Refresh all data
       await fetchContextData();
       
-      // Reset form
+      // Reset form and close modal
       setNewTransaction({
         type: 'expense',
         amount: '',

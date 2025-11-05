@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, Wallet, Plus, MoreVertical, Edit2, Trash2, Check } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, Wallet, Plus, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import AddTransactionModal from './AddTransactionModal';
 import AddTodoModal from './AddTodoModal';
 import EditTodoModal from './EditTodoModal';
 import apiService from '../services/apiService';
 
-const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUpdate, onNavigateToTodos }) => {
+const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUpdate }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddTodoModal, setShowAddTodoModal] = useState(false);
   const [recentTodos, setRecentTodos] = useState([]);
   const [todosLoading, setTodosLoading] = useState(true);
   const [showEditTodoModal, setShowEditTodoModal] = useState(false);
   const [editingTodo, setEditingTodo] = useState(null);
+  const [editingTransaction, setEditingTransaction] = useState(null);
   const [newTransaction, setNewTransaction] = useState({
     type: 'expense',
     amount: '',
@@ -132,7 +133,13 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
         contextId: context.id
       };
 
-      await apiService.addTransaction(transactionToAdd);
+      if (editingTransaction) {
+        // Update existing transaction
+        await apiService.updateTransaction(editingTransaction.id, transactionToAdd);
+      } else {
+        // Add new transaction
+        await apiService.addTransaction(transactionToAdd);
+      }
 
       // Trigger data refresh in parent
       if (onDataUpdate) {
@@ -148,11 +155,38 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
         date: new Date().toISOString().split('T')[0],
         contextId: context.id
       });
+      setEditingTransaction(null);
       setShowAddModal(false);
     } catch (err) {
       console.error('Error adding transaction:', err);
       alert('Failed to add transaction: ' + err.message);
     }
+  };
+
+  const handleEditTransaction = (transaction) => {
+    setEditingTransaction(transaction);
+    setNewTransaction({
+      type: transaction.type,
+      amount: transaction.amount.toString(),
+      tags: transaction.tags || [],
+      description: transaction.description,
+      date: transaction.date,
+      contextId: context.id
+    });
+    setShowAddModal(true);
+  };
+
+  const handleCloseTransactionModal = () => {
+    setShowAddModal(false);
+    setEditingTransaction(null);
+    setNewTransaction({
+      type: 'expense',
+      amount: '',
+      tags: [],
+      description: '',
+      date: new Date().toISOString().split('T')[0],
+      contextId: context.id
+    });
   };
 
   return (
@@ -201,7 +235,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
       {/* Recent Activity Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Transactions */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50">
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-10">
           <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <Wallet size={20} className="text-slate-700" />
             Recent Transactions
@@ -271,15 +305,10 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                       </button>
                       <div className="transaction-menu hidden absolute right-0 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 min-w-[100px]">
                         <button
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.stopPropagation();
                             e.currentTarget.parentElement.classList.add('hidden');
-                            // Set transaction for editing
-                            setNewTransaction({
-                              ...transaction,
-                              contextId: context.id
-                            });
-                            setShowAddModal(true);
+                            handleEditTransaction(transaction);
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
                         >
@@ -319,7 +348,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
         </div>
 
         {/* Recent Todos */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50">
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-10">
           <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CheckSquare size={20} className="text-slate-700" />
@@ -446,7 +475,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
         </div>
 
         {/* Recent Ideas */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50">
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-0">
           <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <Lightbulb size={20} className="text-slate-700" />
             Recent Ideas
@@ -458,7 +487,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
         </div>
 
         {/* Upcoming Events */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50">
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-0">
           <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <Calendar size={20} className="text-slate-700" />
             Upcoming Events
@@ -481,7 +510,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
           <p className="text-sm font-medium">Add Transaction</p>
         </button>
         
-        {/* Add Todo button - blue - NOW WORKING */}
+        {/* Add Todo button - blue */}
         <button 
           onClick={() => setShowAddTodoModal(true)}
           className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow"
@@ -507,11 +536,12 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
       {/* Add Transaction Modal */}
       <AddTransactionModal 
         showModal={showAddModal}
-        setShowModal={setShowAddModal}
+        setShowModal={handleCloseTransactionModal}
         newTransaction={newTransaction}
         setNewTransaction={setNewTransaction}
         onAdd={addTransaction}
         contextId={context.id}
+        isEditing={!!editingTransaction}
       />
 
       {/* Add Todo Modal */}
