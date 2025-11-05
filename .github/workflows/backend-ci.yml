@@ -12,6 +12,21 @@ jobs:
     name: Backend CI
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: secondbrain
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,30 +36,29 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Build backend Docker image
-        run: docker build -t second-brain-backend:ci ./backend
-
-      - name: Run backend container
+      - name: Install dependencies
         run: |
-          docker run -d -p 5000:5000 --name backend second-brain-backend:ci
-          echo "Waiting for backend to start..."
-          for i in {1..10}; do
-            if curl -s http://localhost:5000/api/health > /dev/null; then
-              echo "Backend is up!"
-              break
-            fi
-            echo "Waiting..."
-            sleep 2
-          done
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Initialize database
+        run: |
+          cd backend
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/secondbrain
+          python init_db.py
+        env:
+          AUTO_SEED: false
 
       - name: Run API tests
-        env:
-          API_URL: http://localhost:5000/api
         run: |
-          pip install requests
-          python backend/tests/test_api.py
+          cd backend
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/secondbrain
+          python tests/test_api.py
 
-      - name: Stop backend container
-        if: always()
-        run: docker stop backend
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t second-brain-backend:ci ./backend
 
