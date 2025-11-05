@@ -4,10 +4,16 @@ import { X, Flag, Tag as TagIcon } from 'lucide-react';
 const AddTodoModal = ({ 
   showModal, 
   setShowModal, 
-  newTodo, 
-  setNewTodo, 
+  contextId,
   onAdd 
 }) => {
+  const [newTodo, setNewTodo] = useState({
+    title: '',
+    description: '',
+    priority: 'medium',
+    dueDate: '',
+    tags: []
+  });
   const [tagInput, setTagInput] = useState('');
 
   if (!showModal) return null;
@@ -40,7 +46,37 @@ const AddTodoModal = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onAdd();
+    
+    if (!newTodo.title.trim()) {
+      alert('Todo title is required');
+      return;
+    }
+    
+    // Call onAdd with the todo data
+    onAdd(newTodo);
+    
+    // Reset form
+    setNewTodo({
+      title: '',
+      description: '',
+      priority: 'medium',
+      dueDate: '',
+      tags: []
+    });
+    setTagInput('');
+  };
+
+  const handleClose = () => {
+    // Reset form when closing
+    setNewTodo({
+      title: '',
+      description: '',
+      priority: 'medium',
+      dueDate: '',
+      tags: []
+    });
+    setTagInput('');
+    setShowModal(false);
   };
 
   return (
@@ -50,7 +86,7 @@ const AddTodoModal = ({
           <h3 className="text-xl font-semibold text-slate-800">Add New Todo</h3>
           <button
             type="button"
-            onClick={() => setShowModal(false)}
+            onClick={handleClose}
             className="text-slate-400 hover:text-slate-600 transition-colors"
           >
             <X size={22} />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, BarChart3, Lightbulb, Calendar } from 'lucide-react';
+import { Menu, BarChart3, CheckSquare, Lightbulb, Calendar } from 'lucide-react';
 import ContextSidebar from './components/ContextSidebar';
 import ContextSettingsModal from './components/ContextSettingsModal';
 import ContextOverview from './components/ContextOverview';
@@ -356,23 +356,25 @@ const SecondBrainApp = () => {
         </aside>
 
         {/* Main content */}
-        <div className={`flex-1 overflow-auto ${(showSettingsModal || showAddContextModal) ? 'pointer-events-none' : ''}`}>
-          <div className="p-6 md:p-8">
-            <div className="max-w-6xl mx-auto">
-              {/* Header with hamburger menu */}
-              {!sidebarOpen && (
-                <div className="mb-6">
-                  <button
-                    onClick={() => setSidebarOpen(true)}
-                    className="p-2 hover:bg-white/50 rounded-lg transition-colors"
-                  >
-                    <Menu size={24} className="text-slate-600" />
-                  </button>
-                </div>
-              )}
-
-              {/* Main content area */}
-              {renderMainContent()}
+        <div className={`flex-1 flex flex-col overflow-hidden ${(showSettingsModal || showAddContextModal) ? 'pointer-events-none' : ''}`}>
+          {/* Sticky header bar with hamburger menu */}
+          {!sidebarOpen && (
+            <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/50 px-6 py-3 md:px-8 shadow-sm">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <Menu size={24} className="text-slate-600" />
+              </button>
+            </div>
+          )}
+          
+          {/* Scrollable content area */}
+          <div className="flex-1 overflow-auto">
+            <div className="p-6 md:p-8">
+              <div className="max-w-6xl mx-auto">
+                {/* Main content area */}
+                {renderMainContent()}
             </div>
           </div>
         </div>
@@ -395,6 +397,7 @@ const SecondBrainApp = () => {
         onSave={handleSaveContext}
         onDelete={() => {}}
       />
+    </div>
     </div>
   );
 };

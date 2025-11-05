@@ -60,10 +60,35 @@ const ContextSidebar = ({
     { id: 'settings', name: 'Settings', icon: Settings },
   ];
 
+  // Detect if we're on mobile
+  const isMobile = () => window.innerWidth < 768;
+
   const handleNavigation = (view) => {
     setActiveView(view);
-    if (window.innerWidth < 768) {
+    // Only close sidebar on mobile
+    if (isMobile()) {
       setSidebarOpen(false);
+    }
+  };
+
+  const handleContextClick = (contextId) => {
+    const isExpanded = expandedContexts[contextId];
+    
+    if (isMobile()) {
+      // MOBILE: Tap once to expand, tap app to navigate
+      if (!isExpanded) {
+        // First tap: just expand, don't navigate
+        toggleContext(contextId);
+      } else {
+        // Already expanded, toggle it closed
+        toggleContext(contextId);
+      }
+    } else {
+      // DESKTOP: Normal behavior - toggle and navigate
+      toggleContext(contextId);
+      if (!isExpanded) {
+        handleNavigation({ type: 'context', contextId: contextId, app: 'overview' });
+      }
     }
   };
 
@@ -125,12 +150,7 @@ const ContextSidebar = ({
           return (
             <div key={context.id} className="space-y-0.5">
               <button
-                onClick={() => {
-                  toggleContext(context.id);
-                  if (!isExpanded) {
-                    handleNavigation({ type: 'context', contextId: context.id, app: 'overview' });
-                  }
-                }}
+                onClick={() => handleContextClick(context.id)}
                 className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-sm ${
                   isActive && !expandedContexts[context.id]
                     ? 'bg-indigo-500/90 text-white shadow-sm'
