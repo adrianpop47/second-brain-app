@@ -1,7 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Clock } from 'lucide-react';
 
-const TimePicker = ({ value, onChange, onClear, showClear = true }) => {
+const TimePicker = ({ 
+  value, 
+  onChange, 
+  onClear, 
+  showClear = true, 
+  disabled = false,
+  showIcon = true
+}) => {
   const [showPicker, setShowPicker] = useState(false);
   const [selectedHour, setSelectedHour] = useState(9);
   const [selectedMinute, setSelectedMinute] = useState(0);
@@ -38,6 +45,13 @@ const TimePicker = ({ value, onChange, onClear, showClear = true }) => {
     };
   }, [showPicker]);
 
+  // Ensure picker closes when component becomes disabled
+  useEffect(() => {
+    if (disabled && showPicker) {
+      setShowPicker(false);
+    }
+  }, [disabled, showPicker]);
+
   const formatTime = (hour, minute, period) => {
     const paddedHour = hour.toString().padStart(2, '0');
     const paddedMinute = minute.toString().padStart(2, '0');
@@ -58,25 +72,36 @@ const TimePicker = ({ value, onChange, onClear, showClear = true }) => {
     setShowPicker(false);
   };
 
-  const displayValue = value ? formatTime(selectedHour, selectedMinute, selectedPeriod) : '00:00 AM';
+  const displayValue = value ? formatTime(selectedHour, selectedMinute, selectedPeriod) : 'Select time';
 
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
   const minutes = [0, 15, 30, 45];
 
   return (
-    <div className="relative" ref={pickerRef}>
+    <div className="relative w-full" ref={pickerRef}>
       {/* Input Display */}
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => setShowPicker(!showPicker)}
-          className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-left flex items-center gap-2 hover:bg-slate-100 transition-colors"
+          onClick={() => {
+            if (!disabled) {
+              setShowPicker(!showPicker);
+            }
+          }}
+          disabled={disabled}
+          className={`flex-1 border rounded-lg px-3 py-2.5 text-sm text-left flex items-center gap-2 transition-colors ${
+            disabled
+              ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent'
+          }`}
         >
-          <Clock size={16} className="text-slate-400" />
+          {showIcon && (
+            <Clock size={16} className={disabled ? 'text-slate-300' : 'text-slate-400'} />
+          )}
           <span>{displayValue}</span>
         </button>
         
-        {showClear && value && (
+        {showClear && value && !disabled && (
           <button
             type="button"
             onClick={onClear}
@@ -89,13 +114,13 @@ const TimePicker = ({ value, onChange, onClear, showClear = true }) => {
       </div>
 
       {/* Picker Dropdown */}
-      {showPicker && (
-        <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-200 p-4 z-50 w-64">
+      {showPicker && !disabled && (
+        <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-200 p-4 z-50 w-56">
           <div className="flex gap-2 mb-3">
             {/* Hours Column */}
             <div className="flex-1">
               <div className="text-xs font-medium text-slate-600 mb-2 text-center">Hour</div>
-              <div className="h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 rounded-lg border border-slate-200">
+              <div className="max-h-28 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 rounded-lg border border-slate-200">
                 {hours.map((hour) => (
                   <button
                     key={hour}
@@ -116,7 +141,7 @@ const TimePicker = ({ value, onChange, onClear, showClear = true }) => {
             {/* Minutes Column */}
             <div className="flex-1">
               <div className="text-xs font-medium text-slate-600 mb-2 text-center">Min</div>
-              <div className="h-32 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 rounded-lg border border-slate-200">
+              <div className="max-h-28 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100 rounded-lg border border-slate-200">
                 {minutes.map((minute) => (
                   <button
                     key={minute}

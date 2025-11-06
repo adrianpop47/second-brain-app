@@ -25,6 +25,10 @@ const AddTransactionModal = ({
 
   if (!showModal) return null;
 
+  const handleClose = () => {
+    setShowModal(false);
+  };
+
   const handleAmountChange = (e) => {
     const value = e.target.value;
     const numValue = parseFloat(value);
@@ -82,19 +86,26 @@ const AddTransactionModal = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-semibold text-slate-800">
-            {isEditing ? 'Edit Transaction' : 'Add Transaction'}
-          </h3>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h3 className="text-xl font-semibold text-slate-800">
+              {isEditing ? 'Edit Transaction' : 'Add Transaction'}
+            </h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Keep your income and expenses up to date.
+            </p>
+          </div>
           <button
             type="button"
-            onClick={() => setShowModal(false)}
+            onClick={handleClose}
             className="text-slate-400 hover:text-slate-600 transition-colors"
           >
             <X size={22} />
           </button>
         </div>
+
+        <div className="border-t border-slate-100 mt-4 mb-5" />
         
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Context Selector */}
@@ -226,12 +237,21 @@ const AddTransactionModal = ({
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
-          >
-            {isEditing ? 'Update Transaction' : 'Add Transaction'}
-          </button>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="submit"
+              className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
+            >
+              {isEditing ? 'Save Transaction' : 'Add Transaction'}
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-medium transition-all text-sm"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       </div>
     </div>

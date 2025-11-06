@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { X, Flag, Tag as TagIcon, Calendar as CalendarIcon } from 'lucide-react';
+import { X, Flag, Tag as TagIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import TimePicker from './TimePicker';
 
 const AddTodoModal = ({ 
   showModal, 
   setShowModal, 
-  contextId,
   onAdd 
 }) => {
   const [formData, setFormData] = useState({
@@ -95,8 +94,13 @@ const AddTodoModal = ({
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-semibold text-slate-800">Add New Todo</h3>
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h3 className="text-xl font-semibold text-slate-800">Add New Todo</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Capture a new task for this context and keep everything organized.
+            </p>
+          </div>
           <button
             type="button"
             onClick={handleClose}
@@ -105,6 +109,7 @@ const AddTodoModal = ({
             <X size={22} />
           </button>
         </div>
+        <div className="border-t border-slate-100 mt-4 mb-5" />
         
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Title */}
@@ -177,8 +182,7 @@ const AddTodoModal = ({
             </div>
           </div>
 
-          {/* Due Date & Time Row */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4">
             {/* Due Date */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
@@ -189,7 +193,14 @@ const AddTodoModal = ({
                 <input
                   type="date"
                   value={formData.dueDate}
-                  onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setFormData(prev => ({
+                      ...prev,
+                      dueDate: value,
+                      dueTime: value ? prev.dueTime : ''
+                    }));
+                  }}
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                   min={new Date().toISOString().split('T')[0]}
                 />
@@ -207,16 +218,24 @@ const AddTodoModal = ({
             </div>
 
             {/* Due Time */}
-            {formData.dueDate && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Due Time</label>
-                <TimePicker
-                  value={formData.dueTime}
-                  onChange={(time) => setFormData(prev => ({ ...prev, dueTime: time }))}
-                  onClear={clearDueTime}
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+                <ClockIcon size={14} />
+                Due Time
+              </label>
+              <TimePicker
+                value={formData.dueTime}
+                onChange={(time) => setFormData(prev => ({ ...prev, dueTime: time }))}
+                onClear={clearDueTime}
+                disabled={!formData.dueDate}
+                showIcon={false}
+              />
+              {!formData.dueDate && (
+                <p className="text-xs text-slate-400 mt-1">
+                  Select a due date to enable time selection.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Tags */}
