@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Flag, Tag as TagIcon, Clock } from 'lucide-react';
+import { X, Flag, Tag as TagIcon, Calendar as CalendarIcon } from 'lucide-react';
+import TimePicker from './TimePicker';
 
 const EditTodoModal = ({ 
   showModal, 
@@ -54,6 +55,14 @@ const EditTodoModal = ({
     }));
   };
 
+  const clearDueDate = () => {
+    setEditedTodo(prev => ({ ...prev, dueDate: '', dueTime: '' }));
+  };
+
+  const clearDueTime = () => {
+    setEditedTodo(prev => ({ ...prev, dueTime: '' }));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!editedTodo.title.trim()) {
@@ -65,7 +74,7 @@ const EditTodoModal = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-5">
           <h3 className="text-xl font-semibold text-slate-800">Edit Todo</h3>
           <button
@@ -148,31 +157,46 @@ const EditTodoModal = ({
             </div>
           </div>
 
-          {/* Due Date */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Due Date (optional)</label>
-            <input
-              type="date"
-              value={editedTodo.dueDate}
-              onChange={(e) => setEditedTodo(prev => ({ ...prev, dueDate: e.target.value }))}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-              min={new Date().toISOString().split('T')[0]}
-            />
-          </div>
+          {/* Due Date & Time Row */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Due Date */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+                <CalendarIcon size={14} />
+                Due Date
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={editedTodo.dueDate}
+                  onChange={(e) => setEditedTodo(prev => ({ ...prev, dueDate: e.target.value }))}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+                {editedTodo.dueDate && (
+                  <button
+                    type="button"
+                    onClick={clearDueDate}
+                    className="px-3 py-2.5 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors text-sm font-medium flex items-center justify-center"
+                    title="Clear due date"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
 
-          {/* Due Time - NEW! */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
-              <Clock size={14} />
-              Due Time (optional)
-            </label>
-            <input
-              type="time"
-              value={editedTodo.dueTime}
-              onChange={(e) => setEditedTodo(prev => ({ ...prev, dueTime: e.target.value }))}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-            />
-            <p className="text-xs text-slate-500 mt-1">Set a specific time for this todo</p>
+            {/* Due Time */}
+            {editedTodo.dueDate && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Due Time</label>
+                <TimePicker
+                  value={editedTodo.dueTime}
+                  onChange={(time) => setEditedTodo(prev => ({ ...prev, dueTime: time }))}
+                  onClear={clearDueTime}
+                />
+              </div>
+            )}
           </div>
 
           {/* Tags */}
@@ -214,14 +238,14 @@ const EditTodoModal = ({
           </div>
 
           {/* Calendar Event Notice */}
-          {todo.calendarEventId && (
+          {todo.calendarEventIds && todo.calendarEventIds.length > 0 && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
               <p className="text-xs text-indigo-800 flex items-center gap-1">
                 <span>📅</span>
-                <strong>This todo is on your calendar.</strong>
+                <strong>This todo is linked to {todo.calendarEventIds.length} calendar event{todo.calendarEventIds.length > 1 ? 's' : ''}.</strong>
               </p>
               <p className="text-xs text-indigo-600 mt-1">
-                Changes to the due date/time won't update the calendar event automatically.
+                Changes to the due date/time won't update the calendar events automatically.
               </p>
             </div>
           )}
