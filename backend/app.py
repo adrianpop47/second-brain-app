@@ -8,7 +8,7 @@ import os
 load_dotenv()
 
 # Import database and models
-from models import db, Context, Transaction, Todo
+from models import db, Context, Transaction, Todo, Event
 
 app = Flask(__name__)
 
@@ -424,6 +424,220 @@ def delete_transaction(transaction_id):
         }), 500
 
 
+
+# ============================================================================
+# EVENT ENDPOINTS
+# ============================================================================
+
+@app.route('/api/contexts/<int:context_id>/events', methods=['GET'])
+def get_context_events(context_id):
+    try:
+        from_date = request.args.get('from')  # Optional date filter
+        to_date = request.args.get('to')  # Optional date filter
+        
+        query = Event.query.filter_by(context_id=context_id)
+        
+        # Filter by date range if provided
+        if from_date:
+            query = query.filter(Event.start_date >= datetime.fromisoformat(from_date))
+        if to_date:
+            query = query.filter(Event.start_date <= datetime.fromisoformat(to_date))
+        
+        events = query.order_by(Event.start_date).all()
+        
+        return jsonify({
+            'success': True,
+            'data': [event.to_dict() for event in events],
+            'count': len(events)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching events: {str(e)}'
+        }), 500
+
+
+@app.route('/api/events', methods=['GET'])
+def get_all_events():
+    try:
+        from_date = request.args.get('from')
+        to_date = request.args.get('to')
+        context_id = request.args.get('contextId')
+        
+        query = Event.query
+        
+        if context_id:
+            query = query.filter_by(context_id=int(context_id))
+        if from_date:
+            query = query.filter(Event.start_date >= datetime.fromisoformat(from_date))
+        if to_date:
+            query = query.filter(Event.start_date <= datetime.fromisoformat(to_date))
+        
+        events = query.order_by(Event.start_date).all()
+        
+        return jsonify({
+            'success': True,
+            'data': [event.to_dict() for event in events],
+            'count': len(events)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching events: {str(e)}'
+        }), 500
+
+
+@app.route('/api/events', methods=['POST'])
+def create_event():
+    try:
+        data = request.get_json()
+        
+        if not data.get('title') or not data.get('startDate') or not data.get('contextId'):
+            return jsonify({
+                'success': False,
+                'message': 'Title, start date, and context are required'
+            }), 400
+        
+        # Verify context exists
+        context = Context.query.get(data.get('contextId'))
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Context not found'
+            }), 404
+        
+        # Parse dates
+        start_date = datetime.fromisoformat(data.get('startDate').replace('Z', '+00:00'))
+        end_date = None
+        if data.get('endDate'):
+            end_date = datetime.fromisoformat(data.get('endDate').replace('Z', '+00:00'))
+        
+        recurrence_end_date = None
+        if data.get('recurrenceEndDate'):
+            recurrence_end_date = datetime.strptime(data.get('recurrenceEndDate'), '%Y-%m-%d').date()
+        
+        new_event = Event(
+            context_id=data.get('contextId'),
+            title=data.get('title'),
+            description=data.get('description', ''),
+            start_date=start_date,
+            end_date=end_date,
+            all_day=data.get('allDay', False),
+            tags=data.get('tags', []),
+            recurring=data.get('recurring', False),
+            recurrence_type=data.get('recurrenceType'),
+            recurrence_end_date=recurrence_end_date
+        )
+        
+        db.session.add(new_event)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': new_event.to_dict(),
+            'message': 'Event created successfully'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error creating event: {str(e)}'
+        }), 500
+
+
+@app.route('/api/events/<int:event_id>', methods=['PUT'])
+def update_event(event_id):
+    try:
+        event = Event.query.get(event_id)
+        
+        if not event:
+            return jsonify({
+                'success': False,
+                'message': 'Event not found'
+            }), 404
+        
+        data = request.get_json()
+        
+        # Update fields
+        if 'title' in data:
+            event.title = data['title']
+        if 'description' in data:
+            event.description = data['description']
+        if 'startDate' in data:
+            event.start_date = datetime.fromisoformat(data['startDate'].replace('Z', '+00:00'))
+        if 'endDate' in data:
+            if data['endDate']:
+                event.end_date = datetime.fromisoformat(data['endDate'].replace('Z', '+00:00'))
+            else:
+                event.end_date = None
+        if 'allDay' in data:
+            event.all_day = data['allDay']
+        if 'tags' in data:
+            event.tags = data['tags']
+        if 'completed' in data:
+            event.completed = data['completed']
+        if 'recurring' in data:
+            event.recurring = data['recurring']
+        if 'recurrenceType' in data:
+            event.recurrence_type = data['recurrenceType']
+        if 'recurrenceEndDate' in data:
+            if data['recurrenceEndDate']:
+                event.recurrence_end_date = datetime.strptime(data['recurrenceEndDate'], '%Y-%m-%d').date()
+            else:
+                event.recurrence_end_date = None
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': event.to_dict(),
+            'message': 'Event updated successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error updating event: {str(e)}'
+        }), 500
+
+
+@app.route('/api/events/<int:event_id>', methods=['DELETE'])
+def delete_event(event_id):
+    try:
+        event = Event.query.get(event_id)
+        
+        if not event:
+            return jsonify({
+                'success': False,
+                'message': 'Event not found'
+            }), 404
+        
+        # Check if any todo is linked to this event
+        linked_todo = Todo.query.filter_by(calendar_event_id=event_id).first()
+        if linked_todo:
+            # Unlink the todo
+            linked_todo.calendar_event_id = None
+        
+        db.session.delete(event)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Event deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error deleting event: {str(e)}'
+        }), 500
+
+
 # ============================================================================
 # TODOS ENDPOINTS
 # ============================================================================
@@ -473,6 +687,14 @@ def add_todo():
             except:
                 pass
         
+        # Parse due time if provided
+        due_time = None
+        if data.get('dueTime'):
+            try:
+                due_time = datetime.strptime(data.get('dueTime'), '%H:%M').time()
+            except:
+                pass
+        
         new_todo = Todo(
             context_id=data.get('contextId'),
             title=data.get('title'),
@@ -480,6 +702,7 @@ def add_todo():
             status=data.get('status', 'todo'),
             priority=data.get('priority', 'medium'),
             due_date=due_date,
+            due_time=due_time,
             tags=data.get('tags', [])
         )
         
@@ -513,6 +736,11 @@ def update_todo(todo_id):
         
         data = request.get_json()
         
+        # Track if status changed to 'done'
+        status_changed_to_done = False
+        if 'status' in data and data['status'] == 'done' and todo.status != 'done':
+            status_changed_to_done = True
+        
         # Update only provided fields
         if 'title' in data:
             todo.title = data['title']
@@ -532,6 +760,19 @@ def update_todo(todo_id):
                     pass
             else:
                 todo.due_date = None
+        if 'dueTime' in data:
+            if data['dueTime']:
+                try:
+                    todo.due_time = datetime.strptime(data['dueTime'], '%H:%M').time()
+                except:
+                    pass
+            else:
+                todo.due_time = None
+        
+        # If todo is marked as done and has linked calendar events, mark all events as completed
+        if status_changed_to_done and todo.calendar_events:
+            for event in todo.calendar_events:
+                event.completed = True
         
         db.session.commit()
         
@@ -546,6 +787,133 @@ def update_todo(todo_id):
         return jsonify({
             'success': False,
             'message': f'Error updating todo: {str(e)}'
+        }), 500
+
+
+@app.route('/api/todos/<int:todo_id>/add-to-calendar', methods=['POST'])
+def add_todo_to_calendar(todo_id):
+    try:
+        todo = Todo.query.get(todo_id)
+        
+        if not todo:
+            return jsonify({
+                'success': False,
+                'message': 'Todo not found'
+            }), 404
+        
+        data = request.get_json()
+        
+        # Get date and time from request or use todo's due date/time
+        event_date = data.get('date')
+        event_time = data.get('time')
+        duration_hours = data.get('duration', 1)  # Default 1 hour
+        
+        # Parse date
+        if event_date:
+            start_date = datetime.strptime(event_date, '%Y-%m-%d')
+        elif todo.due_date:
+            start_date = datetime.combine(todo.due_date, datetime.min.time())
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Date is required'
+            }), 400
+        
+        # Parse time
+        if event_time:
+            time_obj = datetime.strptime(event_time, '%H:%M').time()
+        elif todo.due_time:
+            time_obj = todo.due_time
+        else:
+            # Default time based on priority
+            if todo.priority == 'high':
+                time_obj = datetime.strptime('09:00', '%H:%M').time()
+            elif todo.priority == 'low':
+                time_obj = datetime.strptime('17:00', '%H:%M').time()
+            else:
+                time_obj = datetime.strptime('14:00', '%H:%M').time()
+        
+        # Combine date and time
+        start_datetime = datetime.combine(start_date.date(), time_obj)
+        end_datetime = start_datetime + timedelta(hours=duration_hours)
+        
+        # Create event
+        new_event = Event(
+            context_id=todo.context_id,
+            title=todo.title,
+            description=todo.description or f'Scheduled from todo: {todo.title}',
+            start_date=start_datetime,
+            end_date=end_datetime,
+            all_day=False,
+            tags=todo.tags or []
+        )
+        
+        db.session.add(new_event)
+        db.session.flush()  # Get the event ID
+        
+        # Link todo to event (many-to-many)
+        todo.calendar_events.append(new_event)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'todo': todo.to_dict(),
+                'event': new_event.to_dict()
+            },
+            'message': 'Todo added to calendar successfully'
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error adding todo to calendar: {str(e)}'
+        }), 500
+
+
+@app.route('/api/todos/overdue', methods=['GET'])
+def get_overdue_todos():
+    try:
+        context_id = request.args.get('contextId')
+        
+        # Get current date and time
+        now = datetime.now()
+        
+        query = Todo.query.filter(
+            Todo.status != 'done',
+            Todo.due_date.isnot(None)
+        )
+        
+        if context_id:
+            query = query.filter_by(context_id=int(context_id))
+        
+        todos = query.all()
+        
+        # Filter overdue todos
+        overdue_todos = []
+        for todo in todos:
+            if todo.due_time:
+                # Has specific time - check datetime
+                due_datetime = datetime.combine(todo.due_date, todo.due_time)
+                if due_datetime < now:
+                    overdue_todos.append(todo)
+            else:
+                # No time - check if date is in past
+                if todo.due_date < now.date():
+                    overdue_todos.append(todo)
+        
+        return jsonify({
+            'success': True,
+            'data': [todo.to_dict() for todo in overdue_todos],
+            'count': len(overdue_todos)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching overdue todos: {str(e)}'
         }), 500
 
 

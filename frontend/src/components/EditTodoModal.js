@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Flag, Tag as TagIcon } from 'lucide-react';
+import { X, Flag, Tag as TagIcon, Clock } from 'lucide-react';
 
 const EditTodoModal = ({ 
   showModal, 
@@ -12,6 +12,7 @@ const EditTodoModal = ({
     description: '',
     priority: 'medium',
     dueDate: '',
+    dueTime: '',
     tags: []
   });
   const [tagInput, setTagInput] = useState('');
@@ -23,6 +24,7 @@ const EditTodoModal = ({
         description: todo.description || '',
         priority: todo.priority || 'medium',
         dueDate: todo.dueDate || '',
+        dueTime: todo.dueTime || '',
         tags: todo.tags || []
       });
     }
@@ -148,7 +150,7 @@ const EditTodoModal = ({
 
           {/* Due Date */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Due Date</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Due Date (optional)</label>
             <input
               type="date"
               value={editedTodo.dueDate}
@@ -156,6 +158,21 @@ const EditTodoModal = ({
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
               min={new Date().toISOString().split('T')[0]}
             />
+          </div>
+
+          {/* Due Time - NEW! */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+              <Clock size={14} />
+              Due Time (optional)
+            </label>
+            <input
+              type="time"
+              value={editedTodo.dueTime}
+              onChange={(e) => setEditedTodo(prev => ({ ...prev, dueTime: e.target.value }))}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+            />
+            <p className="text-xs text-slate-500 mt-1">Set a specific time for this todo</p>
           </div>
 
           {/* Tags */}
@@ -195,6 +212,19 @@ const EditTodoModal = ({
             />
             <p className="text-xs text-slate-500 mt-1">Press Enter or comma to add a tag</p>
           </div>
+
+          {/* Calendar Event Notice */}
+          {todo.calendarEventId && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+              <p className="text-xs text-indigo-800 flex items-center gap-1">
+                <span>📅</span>
+                <strong>This todo is on your calendar.</strong>
+              </p>
+              <p className="text-xs text-indigo-600 mt-1">
+                Changes to the due date/time won't update the calendar event automatically.
+              </p>
+            </div>
+          )}
 
           <button
             type="submit"
