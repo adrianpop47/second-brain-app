@@ -31,12 +31,10 @@ class ApiService {
   // CONTEXT ENDPOINTS
   // ============================================================================
 
-  // Get all contexts
   async getContexts() {
     return this.request('/contexts');
   }
 
-  // Create a new context
   async createContext(context) {
     return this.request('/contexts', {
       method: 'POST',
@@ -44,7 +42,6 @@ class ApiService {
     });
   }
 
-  // Update a context
   async updateContext(contextId, context) {
     return this.request(`/contexts/${contextId}`, {
       method: 'PUT',
@@ -52,19 +49,16 @@ class ApiService {
     });
   }
 
-  // Delete a context
   async deleteContext(contextId) {
     return this.request(`/contexts/${contextId}`, {
       method: 'DELETE',
     });
   }
 
-  // Get context overview (stats + recent items)
   async getContextOverview(contextId) {
     return this.request(`/contexts/${contextId}/overview`);
   }
 
-  // Get transactions for a specific context
   async getContextTransactions(contextId, dateRange = 'all') {
     return this.request(`/contexts/${contextId}/transactions?range=${dateRange}`);
   }
@@ -73,14 +67,12 @@ class ApiService {
   // TRANSACTION ENDPOINTS
   // ============================================================================
 
-  // Get all transactions with optional date range and context filter
   async getTransactions(dateRange = 'all', contextId = null) {
     const params = new URLSearchParams({ range: dateRange });
     if (contextId) params.append('contextId', contextId);
     return this.request(`/transactions?${params}`);
   }
 
-  // Add a new transaction
   async addTransaction(transaction) {
     return this.request('/transactions', {
       method: 'POST',
@@ -88,14 +80,12 @@ class ApiService {
     });
   }
 
-  // Delete a transaction
   async deleteTransaction(transactionId) {
     return this.request(`/transactions/${transactionId}`, {
       method: 'DELETE',
     });
   }
 
-  // Update a transaction
   async updateTransaction(transactionId, transaction) {
     return this.request(`/transactions/${transactionId}`, {
       method: 'PUT',
@@ -107,12 +97,10 @@ class ApiService {
   // TODOS ENDPOINTS
   // ============================================================================
 
-  // Get todos for a specific context
   async getContextTodos(contextId) {
     return this.request(`/contexts/${contextId}/todos`);
   }
 
-  // Add a new todo
   async addTodo(todo) {
     return this.request('/todos', {
       method: 'POST',
@@ -120,7 +108,6 @@ class ApiService {
     });
   }
 
-  // Update a todo
   async updateTodo(todoId, updates) {
     return this.request(`/todos/${todoId}`, {
       method: 'PUT',
@@ -128,9 +115,66 @@ class ApiService {
     });
   }
 
-  // Delete a todo
   async deleteTodo(todoId) {
     return this.request(`/todos/${todoId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Get overdue todos
+  async getOverdueTodos(contextId = null) {
+    const params = contextId ? `?contextId=${contextId}` : '';
+    return this.request(`/todos/overdue${params}`);
+  }
+
+  // Add todo to calendar
+  async addTodoToCalendar(todoId, eventData) {
+    return this.request(`/todos/${todoId}/add-to-calendar`, {
+      method: 'POST',
+      body: JSON.stringify(eventData),
+    });
+  }
+
+  // ============================================================================
+  // EVENT ENDPOINTS
+  // ============================================================================
+
+  // Get all events
+  async getEvents(fromDate = null, toDate = null, contextId = null) {
+    const params = new URLSearchParams();
+    if (fromDate) params.append('from', fromDate);
+    if (toDate) params.append('to', toDate);
+    if (contextId) params.append('contextId', contextId);
+    return this.request(`/events?${params}`);
+  }
+
+  // Get context events
+  async getContextEvents(contextId, fromDate = null, toDate = null) {
+    const params = new URLSearchParams();
+    if (fromDate) params.append('from', fromDate);
+    if (toDate) params.append('to', toDate);
+    return this.request(`/contexts/${contextId}/events?${params}`);
+  }
+
+  // Create event
+  async createEvent(event) {
+    return this.request('/events', {
+      method: 'POST',
+      body: JSON.stringify(event),
+    });
+  }
+
+  // Update event
+  async updateEvent(eventId, updates) {
+    return this.request(`/events/${eventId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
+  // Delete event
+  async deleteEvent(eventId) {
+    return this.request(`/events/${eventId}`, {
       method: 'DELETE',
     });
   }
@@ -139,26 +183,22 @@ class ApiService {
   // STATS ENDPOINTS
   // ============================================================================
 
-  // Get summary statistics (income, expenses, balance)
   async getSummaryStats(dateRange = 'all', contextId = null) {
     const params = new URLSearchParams({ range: dateRange });
     if (contextId) params.append('contextId', contextId);
     return this.request(`/stats/summary?${params}`);
   }
 
-  // Get expenses grouped by context (for Home view pie chart)
   async getStatsByContext(dateRange = 'all') {
     return this.request(`/stats/by-context?range=${dateRange}`);
   }
 
-  // Get expenses grouped by tag (for context finances pie chart)
   async getStatsByTag(dateRange = 'all', contextId = null) {
     const params = new URLSearchParams({ range: dateRange });
     if (contextId) params.append('contextId', contextId);
     return this.request(`/stats/by-tag?${params}`);
   }
 
-  // Get daily statistics for line chart
   async getDailyStats(dateRange = 'all', contextId = null) {
     const params = new URLSearchParams({ range: dateRange });
     if (contextId) params.append('contextId', contextId);

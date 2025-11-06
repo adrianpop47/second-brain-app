@@ -65,12 +65,14 @@ class Todo(db.Model):
     status = db.Column(db.String(20), default='todo')  # 'todo', 'in_progress', 'done'
     priority = db.Column(db.String(20), default='medium')  # 'low', 'medium', 'high'
     due_date = db.Column(db.Date)
+    due_time = db.Column(db.Time)  # Optional time for due date
     tags = db.Column(db.JSON, default=list)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     context = db.relationship('Context', back_populates='todos')
+    calendar_events = db.relationship('Event', secondary='todo_event_links', back_populates='linked_todos')
     
     def to_dict(self):
         return {
@@ -81,9 +83,19 @@ class Todo(db.Model):
             'status': self.status,
             'priority': self.priority,
             'dueDate': self.due_date.strftime('%Y-%m-%d') if self.due_date else '',
+            'dueTime': self.due_time.strftime('%H:%M') if self.due_time else '',
             'tags': self.tags or [],
-            'createdAt': self.created_at.strftime('%Y-%m-%d')
+            'createdAt': self.created_at.strftime('%Y-%m-%d'),
+            'calendarEventIds': [event.id for event in self.calendar_events]
         }
+
+
+# Many-to-many relationship table for Todo <-> Event
+todo_event_links = db.Table('todo_event_links',
+    db.Column('todo_id', db.Integer, db.ForeignKey('todos.id'), primary_key=True),
+    db.Column('event_id', db.Integer, db.ForeignKey('events.id'), primary_key=True),
+    db.Column('created_at', db.DateTime, default=datetime.utcnow)
+)
 
 
 class Idea(db.Model):
@@ -122,10 +134,15 @@ class Event(db.Model):
     end_date = db.Column(db.DateTime)
     all_day = db.Column(db.Boolean, default=False)
     tags = db.Column(db.JSON, default=list)
+    completed = db.Column(db.Boolean, default=False)  # Track if event is completed
+    recurring = db.Column(db.Boolean, default=False)  # Is this a recurring event
+    recurrence_type = db.Column(db.String(20))  # 'daily', 'weekly', 'monthly', 'yearly'
+    recurrence_end_date = db.Column(db.Date)  # When recurring stops
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
     context = db.relationship('Context', back_populates='events')
+    linked_todos = db.relationship('Todo', secondary='todo_event_links', back_populates='calendar_events')
     
     def to_dict(self):
         return {
@@ -137,5 +154,10 @@ class Event(db.Model):
             'endDate': self.end_date.isoformat() if self.end_date else None,
             'allDay': self.all_day,
             'tags': self.tags or [],
-            'createdAt': self.created_at.strftime('%Y-%m-%d')
+            'completed': self.completed,
+            'recurring': self.recurring,
+            'recurrenceType': self.recurrence_type,
+            'recurrenceEndDate': self.recurrence_end_date.strftime('%Y-%m-%d') if self.recurrence_end_date else None,
+            'createdAt': self.created_at.strftime('%Y-%m-%d'),
+            'linkedTodoIds': [todo.id for todo in self.linked_todos]
         }

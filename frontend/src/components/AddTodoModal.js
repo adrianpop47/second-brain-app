@@ -3,7 +3,8 @@ import { X, Flag, Tag as TagIcon } from 'lucide-react';
 
 const AddTodoModal = ({ 
   showModal, 
-  setShowModal,
+  setShowModal, 
+  contextId,
   onAdd 
 }) => {
   const [newTodo, setNewTodo] = useState({
@@ -11,6 +12,7 @@ const AddTodoModal = ({
     description: '',
     priority: 'medium',
     dueDate: '',
+    dueTime: '',
     tags: []
   });
   const [tagInput, setTagInput] = useState('');
@@ -60,6 +62,7 @@ const AddTodoModal = ({
       description: '',
       priority: 'medium',
       dueDate: '',
+      dueTime: '',
       tags: []
     });
     setTagInput('');
@@ -72,6 +75,7 @@ const AddTodoModal = ({
       description: '',
       priority: 'medium',
       dueDate: '',
+      dueTime: '',
       tags: []
     });
     setTagInput('');
@@ -165,7 +169,7 @@ const AddTodoModal = ({
 
           {/* Due Date */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Due Date</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Due Date (optional)</label>
             <input
               type="date"
               value={newTodo.dueDate}
@@ -173,6 +177,18 @@ const AddTodoModal = ({
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
               min={new Date().toISOString().split('T')[0]}
             />
+          </div>
+
+          {/* Due Time */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Due Time (optional)</label>
+            <input
+              type="time"
+              value={newTodo.dueTime || ''}
+              onChange={(e) => setNewTodo(prev => ({ ...prev, dueTime: e.target.value }))}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+            />
+            <p className="text-xs text-slate-500 mt-1">Set a specific time for this todo</p>
           </div>
 
           {/* Tags */}
