@@ -1,11 +1,80 @@
-import { useState, useEffect } from 'react';
-import { X, Calendar, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Calendar, Clock, ChevronDown } from 'lucide-react';
+import TimePicker from './TimePicker';
 
-const AddTodoToCalendarModal = ({ 
-  showModal, 
-  setShowModal, 
+const DURATION_OPTIONS = [
+  { value: 0.5, label: '30 minutes' },
+  { value: 1, label: '1 hour' },
+  { value: 1.5, label: '1.5 hours' },
+  { value: 2, label: '2 hours' },
+  { value: 3, label: '3 hours' },
+  { value: 4, label: '4 hours' }
+];
+
+const DurationPicker = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef(null);
+  const selectedOption =
+    DURATION_OPTIONS.find((option) => option.value === value) || DURATION_OPTIONS[1];
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative w-full" ref={pickerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+      >
+        <span>{selectedOption.label}</span>
+        <ChevronDown size={16} className="text-slate-400" />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-20">
+          <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+            {DURATION_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                  option.value === value
+                    ? 'bg-indigo-50 text-indigo-600 font-medium'
+                    : 'hover:bg-slate-50 text-slate-600'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AddTodoToCalendarModal = ({
+  showModal,
+  setShowModal,
   todo,
-  onAdd 
+  onAdd
 }) => {
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
@@ -14,52 +83,48 @@ const AddTodoToCalendarModal = ({
 
   useEffect(() => {
     if (showModal && todo) {
-      // Pre-fill with todo's due date/time if available
       if (todo.dueDate) {
         setEventDate(todo.dueDate);
       } else {
-        // Default to today
         setEventDate(new Date().toISOString().split('T')[0]);
       }
 
       if (todo.dueTime) {
         setEventTime(todo.dueTime);
+      } else if (todo.priority === 'high') {
+        setEventTime('09:00');
+      } else if (todo.priority === 'low') {
+        setEventTime('17:00');
       } else {
-        // Default time based on priority
-        if (todo.priority === 'high') {
-          setEventTime('09:00');
-        } else if (todo.priority === 'low') {
-          setEventTime('17:00');
-        } else {
-          setEventTime('14:00');
-        }
+        setEventTime('14:00');
       }
+
+      setDuration(1);
     }
   }, [showModal, todo]);
 
   if (!showModal || !todo) return null;
 
+  const handleClose = () => {
+    setShowModal(false);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!eventDate || !eventTime) {
       alert('Date and time are required');
       return;
     }
 
     setLoading(true);
-    
+
     try {
       await onAdd({
         date: eventDate,
         time: eventTime,
-        duration: duration
+        duration
       });
-      
-      // Reset and close
-      setEventDate('');
-      setEventTime('');
-      setDuration(1);
       setShowModal(false);
     } catch (err) {
       console.error('Error adding to calendar:', err);
@@ -69,18 +134,16 @@ const AddTodoToCalendarModal = ({
     }
   };
 
-  const handleClose = () => {
-    setEventDate('');
-    setEventTime('');
-    setDuration(1);
-    setShowModal(false);
-  };
-
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-        <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-semibold text-slate-800">Add to Calendar</h3>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <h3 className="text-xl font-semibold text-slate-800">Add to Calendar</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Turn this todo into a scheduled calendar event with a clear duration.
+            </p>
+          </div>
           <button
             type="button"
             onClick={handleClose}
@@ -90,25 +153,29 @@ const AddTodoToCalendarModal = ({
           </button>
         </div>
 
-        {/* Todo Info */}
-        <div className="mb-5 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+        <div className="border-t border-slate-100 mt-4 mb-5" />
+
+        <div className="mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
           <p className="font-medium text-slate-800 text-sm">{todo.title}</p>
           {todo.description && (
             <p className="text-xs text-slate-600 mt-1">{todo.description}</p>
           )}
           <div className="flex items-center gap-2 mt-2">
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-              todo.priority === 'high' ? 'bg-red-100 text-red-700' :
-              todo.priority === 'medium' ? 'bg-amber-100 text-amber-700' :
-              'bg-slate-100 text-slate-700'
-            }`}>
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium ${
+                todo.priority === 'high'
+                  ? 'bg-red-100 text-red-700'
+                  : todo.priority === 'medium'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-slate-100 text-slate-700'
+              }`}
+            >
               {todo.priority}
             </span>
           </div>
         </div>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Date */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
               <Calendar size={14} />
@@ -118,74 +185,75 @@ const AddTodoToCalendarModal = ({
               type="date"
               value={eventDate}
               onChange={(e) => setEventDate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
               min={new Date().toISOString().split('T')[0]}
               required
             />
           </div>
 
-          {/* Time */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
               <Clock size={14} />
               Time <span className="text-red-500">*</span>
             </label>
-            <input
-              type="time"
+            <TimePicker
               value={eventTime}
-              onChange={(e) => setEventTime(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-              required
+              onChange={(time) => setEventTime(time)}
+              onClear={() => setEventTime('')}
+              showIcon={false}
+              showClear={false}
             />
             <p className="text-xs text-slate-500 mt-1">
-              Suggested: {todo.priority === 'high' ? '9:00 AM (High priority)' : 
-                         todo.priority === 'low' ? '5:00 PM (Low priority)' : 
-                         '2:00 PM (Medium priority)'}
+              Suggested: {todo.priority === 'high'
+                ? '9:00 AM (High priority)'
+                : todo.priority === 'low'
+                  ? '5:00 PM (Low priority)'
+                  : '2:00 PM (Medium priority)'}
             </p>
           </div>
 
-          {/* Duration */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Duration
             </label>
-            <select
-              value={duration}
-              onChange={(e) => setDuration(parseFloat(e.target.value))}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-            >
-              <option value={0.5}>30 minutes</option>
-              <option value={1}>1 hour</option>
-              <option value={1.5}>1.5 hours</option>
-              <option value={2}>2 hours</option>
-              <option value={3}>3 hours</option>
-              <option value={4}>4 hours</option>
-            </select>
+            <DurationPicker value={duration} onChange={setDuration} />
           </div>
 
-          {/* Info Box */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-xs text-blue-800">
-              <strong>📅 Calendar Event Preview:</strong><br/>
-              {eventDate && eventTime && (
-                <>
-                  {new Date(eventDate).toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    month: 'short', 
-                    day: 'numeric' 
-                  })} at {eventTime} ({duration}h)
-                </>
-              )}
-            </p>
+            <div className="text-xs text-blue-800 flex items-center gap-1 font-semibold mb-1">
+              <Calendar size={12} />
+              <span>Calendar Event Preview</span>
+            </div>
+            {eventDate && eventTime ? (
+              <p className="text-xs text-blue-700">
+                {new Date(eventDate).toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric'
+                })}{' '}
+                at {eventTime} ({duration}h)
+              </p>
+            ) : (
+              <p className="text-xs text-blue-600">Select a date and time to see the preview.</p>
+            )}
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
-          >
-            {loading ? 'Adding...' : 'Add to Calendar'}
-          </button>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
+            >
+              {loading ? 'Adding...' : 'Add to Calendar'}
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-medium transition-all text-sm"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       </div>
     </div>

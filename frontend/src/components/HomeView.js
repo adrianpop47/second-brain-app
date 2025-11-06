@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Wallet, TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import StatCard from './StatCard';
 import ExpenseChart from './ExpenseChart';
 import EditTodoModal from './EditTodoModal';
+import AddTodoToCalendarModal from './AddTodoToCalendarModal';
 import apiService from '../services/apiService';
+import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 
 const HomeView = ({ 
   summaryStats, 
@@ -16,6 +18,8 @@ const HomeView = ({
   const [contexts, setContexts] = useState([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingTodo, setEditingTodo] = useState(null);
+  const [showAddToCalendarModal, setShowAddToCalendarModal] = useState(false);
+  const [calendarTodo, setCalendarTodo] = useState(null);
 
   useEffect(() => {
     fetchAllTodos();
@@ -96,6 +100,13 @@ const HomeView = ({
     }
   };
 
+  const handleAddTodoToCalendar = async (todoId, eventData) => {
+    await apiService.addTodoToCalendar(todoId, eventData);
+    await fetchAllTodos();
+    setShowAddToCalendarModal(false);
+    setCalendarTodo(null);
+  };
+
   const getTodoStats = () => {
     const total = allTodos.length;
     return total;
@@ -168,16 +179,28 @@ const HomeView = ({
             </div>
           ) : allTodos.length > 0 ? (
             <div className="space-y-2 max-h-[250px] overflow-y-auto pb-20">
-              {allTodos.map(todo => {
-                const isOverdue = todo.dueDate && new Date(todo.dueDate) < new Date();
+              {allTodos.map((todo) => {
+                const isOverdue = isTodoOverdue(todo.dueDate, todo.dueTime, todo.status);
+                const formattedDueDate = todo.dueDate
+                  ? new Date(`${todo.dueDate}T00:00:00`).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric'
+                    })
+                  : '';
+                const formattedDueTime = todo.dueTime
+                  ? new Date(`1970-01-01T${todo.dueTime}`).toLocaleTimeString([], {
+                      hour: 'numeric',
+                      minute: '2-digit'
+                    })
+                  : '';
                 const priorityColors = {
                   low: 'bg-slate-100 text-slate-700',
                   medium: 'bg-amber-100 text-amber-700',
                   high: 'bg-red-100 text-red-700'
                 };
-                
+
                 return (
-                  <div 
+                  <div
                     key={`${todo.contextId}-${todo.id}`}
                     className="flex items-start justify-between p-2.5 bg-slate-50/50 rounded-lg hover:bg-slate-100/50 transition-colors group relative"
                   >
@@ -185,27 +208,46 @@ const HomeView = ({
                       <button
                         onClick={() => handleMarkTodoAsDone(todo.id)}
                         className={`p-1.5 rounded-lg flex-shrink-0 transition-all ${
-                          todo.status === 'in_progress' 
-                            ? 'bg-amber-100/80 hover:bg-emerald-100' 
+                          todo.status === 'in_progress'
+                            ? 'bg-amber-100/80 hover:bg-emerald-100'
                             : 'bg-slate-100/80 hover:bg-emerald-100'
                         }`}
                         title="Mark as done"
                       >
-                        <CheckSquare size={14} className={`transition-colors ${
-                          todo.status === 'in_progress' ? 'text-amber-600' : 'text-slate-600'
-                        } group-hover:text-emerald-600`} />
+                        <CheckSquare
+                          size={14}
+                          className={`transition-colors ${
+                            todo.status === 'in_progress' ? 'text-amber-600' : 'text-slate-600'
+                          } group-hover:text-emerald-600`}
+                        />
                       </button>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-slate-800 text-sm truncate">{todo.title}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-xs text-slate-500">{todo.contextName}</span>
-                          {todo.dueDate && (
-                            <>
-                              <span className="text-xs text-slate-300">•</span>
-                              <span className={`text-xs ${isOverdue ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
-                                {new Date(todo.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        <div className="flex flex-col gap-1 mt-0.5 text-xs text-slate-500">
+                          <span>{todo.contextName}</span>
+                          {(todo.dueDate || todo.dueTime) && (
+                            <div
+                              className={`flex items-center gap-3 ${
+                                isOverdue ? 'text-red-600 font-medium' : 'text-slate-500'
+                              }`}
+                            >
+                              <span className="flex items-center gap-1">
+                                <Calendar
+                                  size={12}
+                                  className={isOverdue ? 'text-red-500' : 'text-slate-500'}
+                                />
+                                <span>{formattedDueDate || 'No due date'}</span>
                               </span>
-                            </>
+                              {formattedDueTime && (
+                                <span className="flex items-center gap-1">
+                                  <Clock
+                                    size={12}
+                                    className={isOverdue ? 'text-red-500' : 'text-slate-500'}
+                                  />
+                                  <span>{formattedDueTime}</span>
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -222,14 +264,12 @@ const HomeView = ({
                             e.stopPropagation();
                             const menu = e.currentTarget.nextElementSibling;
                             
-                            // Close all other menus first
-                            document.querySelectorAll('.todo-menu').forEach(m => {
+                            document.querySelectorAll('.todo-menu').forEach((m) => {
                               if (m !== menu) m.classList.add('hidden');
                             });
                             
                             menu.classList.toggle('hidden');
                             
-                            // Adjust position if near bottom of viewport
                             const rect = e.currentTarget.getBoundingClientRect();
                             const spaceBelow = window.innerHeight - rect.bottom;
                             
@@ -247,7 +287,7 @@ const HomeView = ({
                         >
                           <MoreVertical size={14} className="text-slate-500" />
                         </button>
-                        <div className="todo-menu hidden absolute right-0 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-[100] min-w-[100px]">
+                        <div className="todo-menu hidden absolute right-0 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-[100] min-w-[120px]">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -259,6 +299,18 @@ const HomeView = ({
                           >
                             <Edit2 size={12} />
                             Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.currentTarget.parentElement.classList.add('hidden');
+                              setCalendarTodo(todo);
+                              setShowAddToCalendarModal(true);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                          >
+                            <CalendarPlus size={12} />
+                            Add to Calendar
                           </button>
                           <button
                             onClick={(e) => {
@@ -354,7 +406,17 @@ const HomeView = ({
         </div>
       </div>
 
-      {/* Edit Todo Modal */}
+      <AddTodoToCalendarModal
+        showModal={showAddToCalendarModal}
+        setShowModal={setShowAddToCalendarModal}
+        todo={calendarTodo}
+        onAdd={(eventData) => {
+          if (calendarTodo) {
+            handleAddTodoToCalendar(calendarTodo.id, eventData);
+          }
+        }}
+      />
+
       <EditTodoModal
         showModal={showEditModal}
         setShowModal={setShowEditModal}

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, Wallet, Plus, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, Plus, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import AddTransactionModal from './AddTransactionModal';
 import AddTodoModal from './AddTodoModal';
 import EditTodoModal from './EditTodoModal';
+import AddTodoToCalendarModal from './AddTodoToCalendarModal';
 import apiService from '../services/apiService';
+import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 
 const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUpdate }) => {
   const [showAddModal, setShowAddModal] = useState(false);
@@ -12,6 +14,8 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
   const [todosLoading, setTodosLoading] = useState(true);
   const [showEditTodoModal, setShowEditTodoModal] = useState(false);
   const [editingTodo, setEditingTodo] = useState(null);
+  const [showAddToCalendarModal, setShowAddToCalendarModal] = useState(false);
+  const [calendarTodo, setCalendarTodo] = useState(null);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [newTransaction, setNewTransaction] = useState({
     type: 'expense',
@@ -80,9 +84,9 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
   const handleEditTodo = async (todoId, updates) => {
     try {
       await apiService.updateTodo(todoId, updates);
-      fetchRecentTodos();
-      setShowEditTodoModal(false);
+      await fetchRecentTodos();
       setEditingTodo(null);
+      setShowEditTodoModal(false);
       if (onDataUpdate) {
         onDataUpdate();
       }
@@ -107,6 +111,13 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
       console.error('Error adding todo:', err);
       alert('Failed to add todo');
     }
+  };
+
+  const handleAddTodoToCalendar = async (todoId, eventData) => {
+    await apiService.addTodoToCalendar(todoId, eventData);
+    await fetchRecentTodos();
+    setShowAddToCalendarModal(false);
+    setCalendarTodo(null);
   };
 
   if (loading) {
@@ -364,16 +375,28 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
             </div>
           ) : recentTodos.length > 0 ? (
             <div className="space-y-2">
-              {recentTodos.map(todo => {
-                const isOverdue = todo.dueDate && new Date(todo.dueDate) < new Date();
+              {recentTodos.map((todo) => {
+                const isOverdue = isTodoOverdue(todo.dueDate, todo.dueTime, todo.status);
+                const formattedDueDate = todo.dueDate
+                  ? new Date(`${todo.dueDate}T00:00:00`).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric'
+                    })
+                  : '';
+                const formattedDueTime = todo.dueTime
+                  ? new Date(`1970-01-01T${todo.dueTime}`).toLocaleTimeString([], {
+                      hour: 'numeric',
+                      minute: '2-digit'
+                    })
+                  : '';
                 const priorityColors = {
                   low: 'bg-slate-100 text-slate-700',
                   medium: 'bg-amber-100 text-amber-700',
                   high: 'bg-red-100 text-red-700'
                 };
-                
+
                 return (
-                  <div 
+                  <div
                     key={todo.id}
                     className="flex items-start justify-between p-3 bg-slate-50/50 rounded-lg hover:bg-slate-100/50 transition-colors group relative"
                   >
@@ -385,16 +408,38 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                         }`}
                         title="Mark as done"
                       >
-                        <CheckSquare size={14} className={`transition-colors ${
-                          todo.status === 'in_progress' ? 'text-amber-600' : 'text-slate-600'
-                        } group-hover:text-emerald-600`} />
+                        <CheckSquare
+                          size={14}
+                          className={`transition-colors ${
+                            todo.status === 'in_progress' ? 'text-amber-600' : 'text-slate-600'
+                          } group-hover:text-emerald-600`}
+                        />
                       </button>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-slate-800 text-sm truncate">{todo.title}</p>
-                        {todo.dueDate && (
-                          <p className={`text-xs mt-0.5 ${isOverdue ? 'text-red-600 font-medium' : 'text-slate-500'}`}>
-                            Due: {new Date(todo.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                          </p>
+                        {(todo.dueDate || todo.dueTime) && (
+                          <div
+                            className={`flex items-center gap-3 text-xs ${
+                              isOverdue ? 'text-red-600 font-medium' : 'text-slate-500'
+                            } mt-0.5`}
+                          >
+                            <span className="flex items-center gap-1">
+                              <Calendar
+                                size={12}
+                                className={isOverdue ? 'text-red-500' : 'text-slate-500'}
+                              />
+                              <span>{formattedDueDate || 'No due date'}</span>
+                            </span>
+                            {formattedDueTime && (
+                              <span className="flex items-center gap-1">
+                                <Clock
+                                  size={12}
+                                  className={isOverdue ? 'text-red-500' : 'text-slate-500'}
+                                />
+                                <span>{formattedDueTime}</span>
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -402,26 +447,22 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                       <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${priorityColors[todo.priority]}`}>
                         {todo.priority}
                       </span>
-                      
-                      {/* Todo Menu */}
                       <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             const menu = e.currentTarget.nextElementSibling;
-                            
-                            // Close all other menus first
-                            document.querySelectorAll('.todo-menu').forEach(m => {
+
+                            document.querySelectorAll('.todo-menu').forEach((m) => {
                               if (m !== menu) m.classList.add('hidden');
                             });
-                            
+
                             menu.classList.toggle('hidden');
-                            
-                            // Adjust position if near bottom of viewport
+
                             const rect = e.currentTarget.getBoundingClientRect();
                             const spaceBelow = window.innerHeight - rect.bottom;
-                            
-                            if (spaceBelow < 100) {
+
+                            if (spaceBelow < 120) {
                               menu.style.bottom = '100%';
                               menu.style.top = 'auto';
                               menu.style.marginBottom = '4px';
@@ -435,7 +476,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                         >
                           <MoreVertical size={14} className="text-slate-500" />
                         </button>
-                        <div className="todo-menu hidden absolute right-0 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 min-w-[100px]">
+                        <div className="todo-menu hidden absolute right-0 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 min-w-[120px]">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -447,6 +488,18 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                           >
                             <Edit2 size={12} />
                             Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.currentTarget.parentElement.classList.add('hidden');
+                              setCalendarTodo(todo);
+                              setShowAddToCalendarModal(true);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                          >
+                            <CalendarPlus size={12} />
+                            Add to Calendar
                           </button>
                           <button
                             onClick={(e) => {
@@ -473,7 +526,6 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
             </div>
           )}
         </div>
-
         {/* Recent Ideas */}
         <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-0">
           <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
@@ -552,7 +604,17 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
         onAdd={handleAddTodo}
       />
 
-      {/* Edit Todo Modal */}
+      <AddTodoToCalendarModal
+        showModal={showAddToCalendarModal}
+        setShowModal={setShowAddToCalendarModal}
+        todo={calendarTodo}
+        onAdd={(eventData) => {
+          if (calendarTodo) {
+            handleAddTodoToCalendar(calendarTodo.id, eventData);
+          }
+        }}
+      />
+
       <EditTodoModal
         showModal={showEditTodoModal}
         setShowModal={setShowEditTodoModal}
