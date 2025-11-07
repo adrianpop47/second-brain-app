@@ -5,7 +5,6 @@ import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 const TodoCard = ({ 
   todo, 
   onDeleteTodo, 
-  onUpdateTodo,
   onEditRequest,
   onAddToCalendarRequest
 }) => {
