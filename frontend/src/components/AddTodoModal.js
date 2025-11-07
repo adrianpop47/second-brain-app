@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Flag, Tag as TagIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import TimePicker from './TimePicker';
+import DatePicker from './DatePicker';
 
 const AddTodoModal = ({ 
   showModal, 
@@ -13,7 +14,8 @@ const AddTodoModal = ({
     priority: 'medium',
     dueDate: '',
     dueTime: '',
-    tags: []
+    tags: [],
+    status: 'todo'
   });
   const [tagInput, setTagInput] = useState('');
 
@@ -62,7 +64,10 @@ const AddTodoModal = ({
     }
     
     // Call onAdd with the todo data
-    onAdd(formData);
+    onAdd({
+      ...formData,
+      status: formData.status || 'todo'
+    });
     
     // Reset form
     setFormData({
@@ -71,7 +76,8 @@ const AddTodoModal = ({
       priority: 'medium',
       dueDate: '',
       dueTime: '',
-      tags: []
+      tags: [],
+      status: 'todo'
     });
     setTagInput('');
     setShowModal(false);
@@ -85,7 +91,8 @@ const AddTodoModal = ({
       priority: 'medium',
       dueDate: '',
       dueTime: '',
-      tags: []
+      tags: [],
+      status: 'todo'
     });
     setTagInput('');
     setShowModal(false);
@@ -98,7 +105,7 @@ const AddTodoModal = ({
           <div>
             <h3 className="text-xl font-semibold text-slate-800">Add New Todo</h3>
             <p className="text-sm text-slate-500 mt-1">
-              Capture a new task for this context and keep everything organized.
+              Capture a task for this context.
             </p>
           </div>
           <button
@@ -190,30 +197,18 @@ const AddTodoModal = ({
                 Due Date
               </label>
               <div className="flex gap-2">
-                <input
-                  type="date"
+                <DatePicker
                   value={formData.dueDate}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData(prev => ({
+                  onChange={(date) =>
+                    setFormData((prev) => ({
                       ...prev,
-                      dueDate: value,
-                      dueTime: value ? prev.dueTime : ''
-                    }));
-                  }}
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                  min={new Date().toISOString().split('T')[0]}
+                      dueDate: date,
+                      dueTime: date ? prev.dueTime : ''
+                    }))
+                  }
+                  onClear={clearDueDate}
+                  minDate={new Date().toISOString().split('T')[0]}
                 />
-                {formData.dueDate && (
-                  <button
-                    type="button"
-                    onClick={clearDueDate}
-                    className="px-3 py-2.5 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors text-sm font-medium flex items-center justify-center"
-                    title="Clear due date"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
               </div>
             </div>
 
@@ -276,12 +271,21 @@ const AddTodoModal = ({
             <p className="text-xs text-slate-500 mt-1">Press Enter or comma to add a tag</p>
           </div>
 
-          <button
-            type="submit"
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
-          >
-            Add Todo
-          </button>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="submit"
+              className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
+            >
+              Add Todo
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2.5 rounded-lg font-medium transition-all text-sm"
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       </div>
     </div>

@@ -25,7 +25,7 @@ const EditTodoModal = ({
           <div>
             <h3 className="text-xl font-semibold text-slate-800">Edit Todo</h3>
             <p className="text-sm text-slate-500 mt-1">
-              Update the title, description, due date, or tags for this task.
+              Tweak the details for this task.
             </p>
           </div>
           <button
@@ -43,7 +43,6 @@ const EditTodoModal = ({
           todo={todo}
           onSubmit={handleSubmit}
           onCancel={handleClose}
-          submitLabel="Update Todo"
         />
       </div>
     </div>

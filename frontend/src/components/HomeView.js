@@ -20,6 +20,7 @@ const HomeView = ({
   const [editingTodo, setEditingTodo] = useState(null);
   const [showAddToCalendarModal, setShowAddToCalendarModal] = useState(false);
   const [calendarTodo, setCalendarTodo] = useState(null);
+  const [activeTodoMenu, setActiveTodoMenu] = useState(null);
 
   useEffect(() => {
     fetchAllTodos();
@@ -64,6 +65,25 @@ const HomeView = ({
       setTodosLoading(false);
     }
   };
+
+  const openTodoMenu = (event, todo) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuHeight = 120;
+    const menuWidth = 160;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow >= menuHeight ? rect.bottom : rect.top - menuHeight;
+    const left = Math.max(
+      8,
+      Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)
+    );
+    setActiveTodoMenu({
+      todo,
+      style: { top, left }
+    });
+  };
+
+  const closeTodoMenu = () => setActiveTodoMenu(null);
 
   const handleMarkTodoAsDone = async (todoId) => {
     try {
@@ -224,7 +244,7 @@ const HomeView = ({
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-slate-800 text-sm truncate">{todo.title}</p>
                         <div className="flex flex-col gap-1 mt-0.5 text-xs text-slate-500">
-                          <span>{todo.contextName}</span>
+                          <span className="font-semibold text-slate-600">{todo.contextName}</span>
                           {(todo.dueDate || todo.dueTime) && (
                             <div
                               className={`flex items-center gap-3 ${
@@ -252,78 +272,24 @@ const HomeView = ({
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${priorityColors[todo.priority]}`}>
                         {todo.priority}
                       </span>
+                      {isOverdue && (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide bg-red-50 text-red-600 border border-red-200">
+                          Overdue
+                        </span>
+                      )}
                       
                       {/* Todo Menu */}
                       <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const menu = e.currentTarget.nextElementSibling;
-                            
-                            document.querySelectorAll('.todo-menu').forEach((m) => {
-                              if (m !== menu) m.classList.add('hidden');
-                            });
-                            
-                            menu.classList.toggle('hidden');
-                            
-                            const rect = e.currentTarget.getBoundingClientRect();
-                            const spaceBelow = window.innerHeight - rect.bottom;
-                            
-                            if (spaceBelow < 100) {
-                              menu.style.bottom = '100%';
-                              menu.style.top = 'auto';
-                              menu.style.marginBottom = '4px';
-                            } else {
-                              menu.style.top = '100%';
-                              menu.style.bottom = 'auto';
-                              menu.style.marginTop = '4px';
-                            }
-                          }}
+                          onClick={(e) => openTodoMenu(e, todo)}
                           className="p-1 hover:bg-slate-200 rounded transition-colors"
                         >
                           <MoreVertical size={14} className="text-slate-500" />
                         </button>
-                        <div className="todo-menu hidden absolute right-0 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-[100] min-w-[120px]">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.currentTarget.parentElement.classList.add('hidden');
-                              setEditingTodo(todo);
-                              setShowEditModal(true);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
-                          >
-                            <Edit2 size={12} />
-                            Edit
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.currentTarget.parentElement.classList.add('hidden');
-                              setCalendarTodo(todo);
-                              setShowAddToCalendarModal(true);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
-                          >
-                            <CalendarPlus size={12} />
-                            Add to Calendar
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.currentTarget.parentElement.classList.add('hidden');
-                              handleDeleteTodo(todo.id);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
-                          >
-                            <Trash2 size={12} />
-                            Delete
-                          </button>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -405,6 +371,49 @@ const HomeView = ({
           </div>
         </div>
       </div>
+
+      {activeTodoMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={closeTodoMenu} />
+          <div
+            className="fixed z-50 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[150px]"
+            style={activeTodoMenu.style}
+          >
+            <button
+              onClick={() => {
+                setEditingTodo(activeTodoMenu.todo);
+                setShowEditModal(true);
+                closeTodoMenu();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+            >
+              <Edit2 size={12} />
+              Edit
+            </button>
+            <button
+              onClick={() => {
+                setCalendarTodo(activeTodoMenu.todo);
+                setShowAddToCalendarModal(true);
+                closeTodoMenu();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+            >
+              <CalendarPlus size={12} />
+              Add to Calendar
+            </button>
+            <button
+              onClick={() => {
+                handleDeleteTodo(activeTodoMenu.todo.id);
+                closeTodoMenu();
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
+            >
+              <Trash2 size={12} />
+              Delete
+            </button>
+          </div>
+        </>
+      )}
 
       <AddTodoToCalendarModal
         showModal={showAddToCalendarModal}

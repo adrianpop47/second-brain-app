@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, AlertCircle } from 'lucide-react';
+import { X, AlertCircle, Calendar as CalendarIcon, Tag as TagIcon } from 'lucide-react';
+import DatePicker from './DatePicker';
 
 const AddTransactionModal = ({ 
   showModal, 
@@ -26,6 +27,8 @@ const AddTransactionModal = ({
   if (!showModal) return null;
 
   const handleClose = () => {
+    setTagInput('');
+    setShowNegativeWarning(false);
     setShowModal(false);
   };
 
@@ -192,7 +195,10 @@ const AddTransactionModal = ({
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Tags (optional)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+              <TagIcon size={14} />
+              Tags (optional)
+            </label>
             <div className="flex flex-wrap gap-2 mb-2 min-h-[32px]">
               {(newTransaction.tags || []).length > 0 ? (
                 (newTransaction.tags || []).map((tag, index) => (
@@ -227,13 +233,14 @@ const AddTransactionModal = ({
 
           {/* Date */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
-            <input
-              type="date"
+            <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+              <CalendarIcon size={14} />
+              Date
+            </label>
+            <DatePicker
               value={newTransaction.date}
-              onChange={(e) => setNewTransaction(prev => ({ ...prev, date: e.target.value }))}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-              required
+              onChange={(date) => setNewTransaction((prev) => ({ ...prev, date }))}
+              showClear={false}
             />
           </div>
 
@@ -242,7 +249,7 @@ const AddTransactionModal = ({
               type="submit"
               className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white py-2.5 rounded-lg font-medium transition-all text-sm"
             >
-              {isEditing ? 'Save Transaction' : 'Add Transaction'}
+              {isEditing ? 'Save' : 'Add Transaction'}
             </button>
             <button
               type="button"
