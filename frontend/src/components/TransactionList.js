@@ -75,7 +75,7 @@ const TransactionList = ({
         </div>
       ) : (
         <>
-          <div className="space-y-2.5 overflow-hidden">
+          <div className="space-y-2.5">
             {displayedTransactions.map((transaction, index) => (
               <TransactionItem 
                 key={`${transaction.id}-${visibleCount}`}

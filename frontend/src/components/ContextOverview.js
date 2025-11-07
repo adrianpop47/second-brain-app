@@ -447,6 +447,11 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                       <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${priorityColors[todo.priority]}`}>
                         {todo.priority}
                       </span>
+                      {isOverdue && (
+                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide bg-red-50 text-red-600 border border-red-200">
+                          Overdue
+                        </span>
+                      )}
                       <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={(e) => {
@@ -496,7 +501,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                               setCalendarTodo(todo);
                               setShowAddToCalendarModal(true);
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
                           >
                             <CalendarPlus size={12} />
                             Add to Calendar
@@ -600,7 +605,6 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
       <AddTodoModal
         showModal={showAddTodoModal}
         setShowModal={setShowAddTodoModal}
-        contextId={context.id}
         onAdd={handleAddTodo}
       />
 

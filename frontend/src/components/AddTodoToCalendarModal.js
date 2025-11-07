@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Calendar, Clock, ChevronDown } from 'lucide-react';
 import TimePicker from './TimePicker';
+import DatePicker from './DatePicker';
 
 const DURATION_OPTIONS = [
   { value: 0.5, label: '30 minutes' },
@@ -141,7 +142,7 @@ const AddTodoToCalendarModal = ({
           <div>
             <h3 className="text-xl font-semibold text-slate-800">Add to Calendar</h3>
             <p className="text-sm text-slate-500 mt-1">
-              Turn this todo into a scheduled calendar event with a clear duration.
+              Schedule this todo with a clear time block.
             </p>
           </div>
           <button
@@ -181,13 +182,11 @@ const AddTodoToCalendarModal = ({
               <Calendar size={14} />
               Date <span className="text-red-500">*</span>
             </label>
-            <input
-              type="date"
+            <DatePicker
               value={eventDate}
-              onChange={(e) => setEventDate(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-              min={new Date().toISOString().split('T')[0]}
-              required
+              onChange={setEventDate}
+              minDate={new Date().toISOString().split('T')[0]}
+              showClear={false}
             />
           </div>
 

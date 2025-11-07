@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, X, Filter } from 'lucide-react';
 import TodoColumn from './TodoColumn';
 import AddTodoModal from './AddTodoModal';
+import EditTodoModal from './EditTodoModal';
+import AddTodoToCalendarModal from './AddTodoToCalendarModal';
 import apiService from '../services/apiService';
+import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 
 const STATUSES = {
   TODO: 'todo',
@@ -16,20 +19,30 @@ const ContextTodos = ({ context }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterPriority, setFilterPriority] = useState('all');
-  const [newTodo, setNewTodo] = useState({
-    title: '',
-    description: '',
-    priority: 'medium',
-    dueDate: '',
-    tags: [],
-    contextId: context.id,
-    status: STATUSES.TODO
-  });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingTodo, setEditingTodo] = useState(null);
+  const [showAddToCalendarModal, setShowAddToCalendarModal] = useState(false);
+  const [calendarTodo, setCalendarTodo] = useState(null);
+  const [showOnlyOverdue, setShowOnlyOverdue] = useState(false);
+  const [priorityPickerOpen, setPriorityPickerOpen] = useState(false);
+  const priorityPickerRef = useRef(null);
 
   useEffect(() => {
     fetchTodos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.id]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (priorityPickerRef.current && !priorityPickerRef.current.contains(e.target)) {
+        setPriorityPickerOpen(false);
+      }
+    };
+    if (priorityPickerOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [priorityPickerOpen]);
 
   const fetchTodos = async () => {
     try {
@@ -43,30 +56,20 @@ const ContextTodos = ({ context }) => {
     }
   };
 
-  const addTodo = async () => {
-    if (!newTodo.title.trim()) {
+  const addTodo = async (todoData) => {
+    if (!todoData.title.trim()) {
       alert('Todo title is required');
       return;
     }
 
     try {
       await apiService.addTodo({
-        ...newTodo,
+        ...todoData,
+        status: todoData.status || STATUSES.TODO,
         contextId: context.id
       });
 
       await fetchTodos();
-      
-      // Reset form
-      setNewTodo({
-        title: '',
-        description: '',
-        priority: 'medium',
-        dueDate: '',
-        tags: [],
-        contextId: context.id,
-        status: STATUSES.TODO
-      });
       setShowAddModal(false);
     } catch (err) {
       console.error('Error adding todo:', err);
@@ -106,6 +109,33 @@ const ContextTodos = ({ context }) => {
     }
   };
 
+  const handleUpdateTodo = async (todoId, updates) => {
+    await updateTodo(todoId, updates);
+    setShowEditModal(false);
+    setEditingTodo(null);
+  };
+
+  const handleAddTodoToCalendar = async (todoId, eventData) => {
+    await apiService.addTodoToCalendar(todoId, eventData);
+    await fetchTodos();
+    setShowAddToCalendarModal(false);
+    setCalendarTodo(null);
+  };
+
+  const openEditModal = (todo) => {
+    setEditingTodo(todo);
+    setShowEditModal(true);
+  };
+
+  const openCalendarModal = (todo) => {
+    setCalendarTodo(todo);
+    setShowAddToCalendarModal(true);
+  };
+
+  const overdueTodos = todos.filter((todo) =>
+    isTodoOverdue(todo.dueDate, todo.dueTime, todo.status)
+  );
+
   // Filter todos based on search and priority
   const filteredTodos = todos.filter(todo => {
     // Remove # from search query if user types it
@@ -117,8 +147,11 @@ const ContextTodos = ({ context }) => {
       todo.tags?.some(tag => tag.toLowerCase().includes(cleanQuery));
     
     const matchesPriority = filterPriority === 'all' || todo.priority === filterPriority;
+
+    const matchesOverdue =
+      !showOnlyOverdue || isTodoOverdue(todo.dueDate, todo.dueTime, todo.status);
     
-    return matchesSearch && matchesPriority;
+    return matchesSearch && matchesPriority && matchesOverdue;
   });
 
   // Group todos by status
@@ -166,10 +199,14 @@ const ContextTodos = ({ context }) => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
         <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
           <p className="text-xs font-medium text-slate-600 mb-1">Total</p>
           <p className="text-2xl font-semibold text-slate-800">{stats.total}</p>
+        </div>
+        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
+          <p className="text-xs font-medium text-slate-600 mb-1">Overdue</p>
+          <p className="text-2xl font-semibold text-red-600">{overdueTodos.length}</p>
         </div>
         <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
           <p className="text-xs font-medium text-slate-600 mb-1">To Do</p>
@@ -211,24 +248,66 @@ const ContextTodos = ({ context }) => {
           )}
         </div>
 
-        {/* Priority Filter */}
-        <div className="relative sm:w-48">
-          <Filter size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className="appearance-none w-full bg-white/70 backdrop-blur-sm border border-slate-200 rounded-lg pl-10 pr-8 py-2.5 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent cursor-pointer"
+        {/* Show Only Overdue */}
+        <div className="sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setShowOnlyOverdue((prev) => !prev)}
+            className={`w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              showOnlyOverdue
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
           >
-            <option value="all">All Priorities</option>
-            <option value="low">Low Priority</option>
-            <option value="medium">Medium Priority</option>
-            <option value="high">High Priority</option>
-          </select>
+            {showOnlyOverdue ? 'Showing Overdue Only' : 'Show Only Overdue'}
+          </button>
+        </div>
+
+        {/* Priority Filter */}
+        <div className="relative sm:w-48" ref={priorityPickerRef}>
+          <button
+            type="button"
+            onClick={() => setPriorityPickerOpen((prev) => !prev)}
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 py-2.5 text-sm font-medium text-slate-700 text-left flex items-center gap-2 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+          >
+            <Filter size={16} className="text-slate-400" />
+            <span>
+              {filterPriority === 'all'
+                ? 'All Priorities'
+                : filterPriority.charAt(0).toUpperCase() + filterPriority.slice(1)}
+            </span>
+          </button>
           <div className="absolute top-1/2 right-2 -translate-y-1/2 pointer-events-none">
             <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </div>
+          {priorityPickerOpen && (
+            <div className="absolute z-20 mt-2 w-full bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+              {[
+                { value: 'all', label: 'All Priorities' },
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' }
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setFilterPriority(option.value);
+                    setPriorityPickerOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm ${
+                    filterPriority === option.value
+                      ? 'bg-indigo-50 text-indigo-600 font-semibold'
+                      : 'hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -242,6 +321,8 @@ const ContextTodos = ({ context }) => {
           onDeleteTodo={deleteTodo}
           onUpdateTodo={updateTodo}
           color="slate"
+          onEditRequest={openEditModal}
+          onAddToCalendarRequest={openCalendarModal}
         />
         <TodoColumn
           title="In Progress"
@@ -251,6 +332,8 @@ const ContextTodos = ({ context }) => {
           onDeleteTodo={deleteTodo}
           onUpdateTodo={updateTodo}
           color="amber"
+          onEditRequest={openEditModal}
+          onAddToCalendarRequest={openCalendarModal}
         />
         <TodoColumn
           title="Done"
@@ -260,6 +343,8 @@ const ContextTodos = ({ context }) => {
           onDeleteTodo={deleteTodo}
           onUpdateTodo={updateTodo}
           color="emerald"
+          onEditRequest={openEditModal}
+          onAddToCalendarRequest={openCalendarModal}
         />
       </div>
 
@@ -267,9 +352,25 @@ const ContextTodos = ({ context }) => {
       <AddTodoModal
         showModal={showAddModal}
         setShowModal={setShowAddModal}
-        newTodo={newTodo}
-        setNewTodo={setNewTodo}
         onAdd={addTodo}
+      />
+
+      <AddTodoToCalendarModal
+        showModal={showAddToCalendarModal}
+        setShowModal={setShowAddToCalendarModal}
+        todo={calendarTodo}
+        onAdd={(eventData) => {
+          if (calendarTodo) {
+            handleAddTodoToCalendar(calendarTodo.id, eventData);
+          }
+        }}
+      />
+
+      <EditTodoModal
+        showModal={showEditModal}
+        setShowModal={setShowEditModal}
+        todo={editingTodo}
+        onUpdate={handleUpdateTodo}
       />
     </div>
   );

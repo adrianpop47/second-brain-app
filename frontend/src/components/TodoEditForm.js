@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Check, X, Flag, Tag as TagIcon } from 'lucide-react';
+import { Flag, Tag as TagIcon, X, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import TimePicker from './TimePicker';
+import DatePicker from './DatePicker';
 
 const priorityOptions = [
   { value: 'low', label: 'Low', active: 'bg-slate-500 text-white', inactive: 'bg-slate-100 text-slate-600 hover:bg-slate-200' },
@@ -149,38 +150,29 @@ const TodoEditForm = ({
       {/* Due Date & Time */}
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+            <CalendarIcon size={14} />
             Due Date
           </label>
           <div className="flex gap-2">
-            <input
-              type="date"
+            <DatePicker
               value={formState.dueDate}
-              onChange={(e) => {
-                const value = e.target.value;
+              onChange={(date) =>
                 setFormState((prev) => ({
                   ...prev,
-                  dueDate: value,
-                  dueTime: value ? prev.dueTime : ''
-                }));
-              }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  dueDate: date,
+                  dueTime: date ? prev.dueTime : ''
+                }))
+              }
+              onClear={clearDueDate}
+              showIcon={false}
             />
-            {formState.dueDate && (
-              <button
-                type="button"
-                onClick={clearDueDate}
-                className="px-3 py-2.5 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors text-sm font-medium flex items-center justify-center"
-                title="Clear due date"
-              >
-                <X size={16} />
-              </button>
-            )}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+            <ClockIcon size={14} />
             Due Time
           </label>
           <TimePicker
@@ -242,17 +234,15 @@ const TodoEditForm = ({
         <button
           type="submit"
           disabled={saving || submittingProp}
-          className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="flex-1 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
         >
-          <Check size={16} />
           {submitLabel}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 flex items-center justify-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
         >
-          <X size={16} />
           Cancel
         </button>
       </div>

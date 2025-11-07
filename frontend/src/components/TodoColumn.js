@@ -9,6 +9,8 @@ const TodoColumn = ({
   onUpdateStatus, 
   onDeleteTodo, 
   onUpdateTodo,
+  onEditRequest,
+  onAddToCalendarRequest,
   color = 'slate' 
 }) => {
   const [dragOverColumn, setDragOverColumn] = useState(false);
@@ -108,6 +110,8 @@ const TodoColumn = ({
               onUpdateStatus={onUpdateStatus}
               onDeleteTodo={onDeleteTodo}
               onUpdateTodo={onUpdateTodo}
+              onEditRequest={onEditRequest}
+              onAddToCalendarRequest={onAddToCalendarRequest}
             />
           ))
         )}

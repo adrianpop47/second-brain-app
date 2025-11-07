@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { MoreVertical, Trash2, Calendar, CalendarPlus, Clock, Flag, Tag, Edit2 } from 'lucide-react';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
-import AddTodoToCalendarModal from './AddTodoToCalendarModal';
-import EditTodoModal from './EditTodoModal';
-import apiService from '../services/apiService';
 
-const TodoCard = ({ todo, onDeleteTodo, onUpdateTodo }) => {
+const TodoCard = ({ 
+  todo, 
+  onDeleteTodo, 
+  onUpdateTodo,
+  onEditRequest,
+  onAddToCalendarRequest
+}) => {
   const [showMenu, setShowMenu] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showAddToCalendarModal, setShowAddToCalendarModal] = useState(false);
 
   const priorityColors = {
     low: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -41,13 +42,9 @@ const TodoCard = ({ todo, onDeleteTodo, onUpdateTodo }) => {
       })
     : '';
 
-  const handleAddToCalendar = async (eventData) => {
-    return apiService.addTodoToCalendar(todo.id, eventData);
-  };
-
   return (
     <div
-      draggable={!showEditModal}
+      draggable
       onDragStart={handleDragStart}
       className="bg-white rounded-lg p-3 shadow-sm border border-slate-200/50 hover:shadow-md transition-all cursor-move group"
     >
@@ -70,7 +67,7 @@ const TodoCard = ({ todo, onDeleteTodo, onUpdateTodo }) => {
               <div className="absolute right-0 top-6 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 min-w-[140px]">
                 <button
                   onClick={() => {
-                    setShowEditModal(true);
+                    onEditRequest?.(todo);
                     setShowMenu(false);
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-sm text-slate-700"
@@ -80,10 +77,10 @@ const TodoCard = ({ todo, onDeleteTodo, onUpdateTodo }) => {
                 </button>
                 <button
                   onClick={() => {
-                    setShowAddToCalendarModal(true);
+                    onAddToCalendarRequest?.(todo);
                     setShowMenu(false);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-sm text-slate-700"
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-sm text-slate-700 whitespace-nowrap"
                 >
                   <CalendarPlus size={14} />
                   Add to Calendar
@@ -128,9 +125,16 @@ const TodoCard = ({ todo, onDeleteTodo, onUpdateTodo }) => {
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100">
-        <div className={`flex items-center gap-1 px-2 py-0.5 rounded border ${priorityColors[todo.priority]}`}>
-          <Flag size={10} className={priorityIcons[todo.priority]} />
-          <span className="text-xs font-medium capitalize">{todo.priority}</span>
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded border ${priorityColors[todo.priority]}`}>
+            <Flag size={10} className={priorityIcons[todo.priority]} />
+            <span className="text-xs font-medium capitalize">{todo.priority}</span>
+          </div>
+          {isOverdue && (
+            <span className="px-2 py-0.5 rounded border border-red-200 bg-red-50 text-red-600 text-[11px] font-semibold uppercase tracking-wide">
+              Overdue
+            </span>
+          )}
         </div>
 
         {(todo.dueDate || todo.dueTime) && (
@@ -153,18 +157,6 @@ const TodoCard = ({ todo, onDeleteTodo, onUpdateTodo }) => {
         )}
       </div>
 
-      <AddTodoToCalendarModal
-        showModal={showAddToCalendarModal}
-        setShowModal={setShowAddToCalendarModal}
-        todo={todo}
-        onAdd={handleAddToCalendar}
-      />
-      <EditTodoModal
-        showModal={showEditModal}
-        setShowModal={setShowEditModal}
-        todo={todo}
-        onUpdate={onUpdateTodo}
-      />
     </div>
   );
 };

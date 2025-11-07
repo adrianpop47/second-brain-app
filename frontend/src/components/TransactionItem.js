@@ -1,8 +1,21 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { TrendingUp, TrendingDown, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 
 const TransactionItem = ({ transaction, index, onEdit, onDelete }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [menuDirection, setMenuDirection] = useState('below');
+  const buttonRef = useRef(null);
+
+  const toggleMenu = () => {
+    if (!showMenu) {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (rect) {
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setMenuDirection(spaceBelow < 140 ? 'above' : 'below');
+      }
+    }
+    setShowMenu((prev) => !prev);
+  };
 
   return (
     <div
@@ -51,7 +64,8 @@ const TransactionItem = ({ transaction, index, onEdit, onDelete }) => {
         {/* Menu Button */}
         <div className="relative">
           <button
-            onClick={() => setShowMenu(!showMenu)}
+            ref={buttonRef}
+            onClick={toggleMenu}
             className="p-1 hover:bg-slate-200 rounded transition-colors opacity-0 group-hover:opacity-100"
           >
             <MoreVertical size={16} className="text-slate-500" />
@@ -63,7 +77,11 @@ const TransactionItem = ({ transaction, index, onEdit, onDelete }) => {
                 className="fixed inset-0 z-10" 
                 onClick={() => setShowMenu(false)}
               />
-              <div className="absolute right-0 top-6 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 min-w-[120px]">
+              <div
+                className={`absolute right-0 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 min-w-[120px] ${
+                  menuDirection === 'above' ? 'bottom-full mb-1' : 'top-full mt-1'
+                }`}
+              >
                 <button
                   onClick={() => {
                     onEdit(transaction);
