@@ -6,6 +6,7 @@ import ContextOverview from './components/ContextOverview';
 import HomeView from './components/HomeView';
 import ContextFinances from './components/ContextFinances';
 import ContextTodos from './components/ContextTodos';
+import ContextCalendar from './components/ContextCalendar';
 import apiService from './services/apiService';
 
 const SecondBrainApp = () => {
@@ -34,6 +35,10 @@ const SecondBrainApp = () => {
   // Context overview data
   const [contextOverview, setContextOverview] = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
+
+  // Cross-navigation focus
+  const [calendarFocus, setCalendarFocus] = useState(null); // { contextId, eventId }
+  const [todoFocus, setTodoFocus] = useState(null); // { contextId, todoId }
 
   // Fetch contexts on mount
   useEffect(() => {
@@ -221,16 +226,25 @@ const SecondBrainApp = () => {
     : null;
 
   // Render main content based on active view
+  const handleViewCalendarEventFromTodo = (contextId, eventId) => {
+    setActiveView({ type: 'context', contextId, app: 'calendar' });
+    setCalendarFocus({ contextId, eventId });
+  };
+
+  const handleViewTodoFromEvent = (contextId, todoId) => {
+    setActiveView({ type: 'context', contextId, app: 'todos' });
+    setTodoFocus({ contextId, todoId });
+  };
+
   const renderMainContent = () => {
     if (activeView.type === 'home') {
       return (
         <HomeView
           summaryStats={homeStats}
           contextData={contextData}
-          dateRange={dateRange}
-          setDateRange={setDateRange}
-          onQuickAdd={() => {/* TODO: Implement quick add modal */}}
-          loading={false}
+          loading={loading}
+          onRequestViewCalendarEvent={handleViewCalendarEventFromTodo}
+          onRequestViewLinkedTodo={handleViewTodoFromEvent}
         />
       );
     }
@@ -256,7 +270,8 @@ const SecondBrainApp = () => {
             recentTransactions={contextOverview?.recent_transactions || []}
             loading={overviewLoading}
             onDataUpdate={handleContextDataUpdate}
-            onNavigateToTodos={() => handleNavigation({ type: 'context', contextId: currentContext.id, app: 'todos' })}
+            onRequestViewCalendarEvent={handleViewCalendarEventFromTodo}
+            onRequestViewLinkedTodo={handleViewTodoFromEvent}
           />
         );
       }
@@ -273,7 +288,12 @@ const SecondBrainApp = () => {
 
       if (activeView.app === 'todos') {
         return (
-          <ContextTodos context={currentContext} />
+          <ContextTodos
+            context={currentContext}
+            focusedTodoId={todoFocus?.contextId === currentContext.id ? todoFocus.todoId : null}
+            onClearFocus={() => setTodoFocus(null)}
+            onRequestViewCalendarEvent={handleViewCalendarEventFromTodo}
+          />
         );
       }
 
@@ -291,13 +311,12 @@ const SecondBrainApp = () => {
 
       if (activeView.app === 'calendar') {
         return (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
-              <Calendar size={48} className="text-orange-600" />
-            </div>
-            <h2 className="text-2xl font-semibold text-slate-800 mb-2">Calendar Coming Soon</h2>
-            <p className="text-slate-600">Schedule and manage your events</p>
-          </div>
+          <ContextCalendar
+            context={currentContext}
+            focusedEventId={calendarFocus?.contextId === currentContext.id ? calendarFocus.eventId : null}
+            onClearFocus={() => setCalendarFocus(null)}
+            onViewLinkedTodo={handleViewTodoFromEvent}
+          />
         );
       }
     }

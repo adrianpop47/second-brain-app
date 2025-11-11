@@ -86,7 +86,8 @@ class Todo(db.Model):
             'dueTime': self.due_time.strftime('%H:%M') if self.due_time else '',
             'tags': self.tags or [],
             'createdAt': self.created_at.strftime('%Y-%m-%d'),
-            'calendarEventIds': [event.id for event in self.calendar_events]
+            'calendarEventIds': [event.id for event in self.calendar_events],
+            'calendarEventId': self.calendar_events[0].id if self.calendar_events else None
         }
 
 
@@ -159,5 +160,6 @@ class Event(db.Model):
             'recurrenceType': self.recurrence_type,
             'recurrenceEndDate': self.recurrence_end_date.strftime('%Y-%m-%d') if self.recurrence_end_date else None,
             'createdAt': self.created_at.strftime('%Y-%m-%d'),
-            'linkedTodoIds': [todo.id for todo in self.linked_todos]
+            'linkedTodoIds': [todo.id for todo in self.linked_todos],
+            'linkedTodoId': self.linked_todos[0].id if self.linked_todos else None
         }

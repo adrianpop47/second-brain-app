@@ -135,6 +135,12 @@ class ApiService {
     });
   }
 
+  async unlinkTodoFromEvent(todoId, eventId) {
+    return this.request(`/todos/${todoId}/events/${eventId}/unlink`, {
+      method: 'DELETE',
+    });
+  }
+
   // ============================================================================
   // EVENT ENDPOINTS
   // ============================================================================

@@ -1,13 +1,36 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, Plus, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, Plus, MoreVertical, Edit2, Trash2, Unlink } from 'lucide-react';
 import AddTransactionModal from './AddTransactionModal';
 import AddTodoModal from './AddTodoModal';
 import EditTodoModal from './EditTodoModal';
 import AddTodoToCalendarModal from './AddTodoToCalendarModal';
+import EventModal from './EventModal';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
+import { deleteTodoWithConfirmation, deleteEventWithConfirmation } from '../utils/deleteUtils';
 
-const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUpdate }) => {
+const OverviewCard = ({ title, icon: Icon, rightSlot = null, children, className = '' }) => (
+  <div className={`bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 ${className}`}>
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        {Icon && <Icon size={20} className="text-slate-700" />}
+        <h3 className="text-lg font-semibold text-slate-800">{title}</h3>
+      </div>
+      {rightSlot}
+    </div>
+    {children}
+  </div>
+);
+
+const ContextOverview = ({
+  context,
+  stats,
+  recentTransactions,
+  loading,
+  onDataUpdate,
+  onRequestViewCalendarEvent = () => {},
+  onRequestViewLinkedTodo = () => {}
+}) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddTodoModal, setShowAddTodoModal] = useState(false);
   const [recentTodos, setRecentTodos] = useState([]);
@@ -16,6 +39,11 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
   const [editingTodo, setEditingTodo] = useState(null);
   const [showAddToCalendarModal, setShowAddToCalendarModal] = useState(false);
   const [calendarTodo, setCalendarTodo] = useState(null);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [openEventMenuId, setOpenEventMenuId] = useState(null);
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [newTransaction, setNewTransaction] = useState({
     type: 'expense',
@@ -25,11 +53,6 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
     date: new Date().toISOString().split('T')[0],
     contextId: context.id
   });
-
-  useEffect(() => {
-    fetchRecentTodos();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.id]);
 
   const fetchRecentTodos = async () => {
     try {
@@ -52,6 +75,36 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
     }
   };
 
+  const fetchUpcomingEvents = async () => {
+    try {
+      setEventsLoading(true);
+      const today = new Date();
+      const end = new Date();
+      end.setDate(today.getDate() + 14);
+      const format = (date) => date.toISOString().split('T')[0];
+      const response = await apiService.getContextEvents(
+        context.id,
+        format(today),
+        format(end)
+      );
+      const upcoming = response.data
+        .filter((event) => new Date(event.startDate) >= today)
+        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+        .slice(0, 5);
+      setUpcomingEvents(upcoming);
+    } catch (err) {
+      console.error('Error fetching upcoming events:', err);
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecentTodos();
+    fetchUpcomingEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context.id]);
+
   const handleMarkTodoAsDone = async (todoId) => {
     try {
       await apiService.updateTodo(todoId, { status: 'done' });
@@ -66,18 +119,18 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
     }
   };
 
-  const handleDeleteTodo = async (todoId) => {
-    if (window.confirm('Are you sure you want to delete this todo?')) {
-      try {
-        await apiService.deleteTodo(todoId);
+  const handleDeleteTodo = async (todo) => {
+    try {
+      const deleted = await deleteTodoWithConfirmation(todo.id, todo, apiService);
+      if (deleted) {
         fetchRecentTodos();
         if (onDataUpdate) {
           onDataUpdate();
         }
-      } catch (err) {
-        console.error('Error deleting todo:', err);
-        alert('Failed to delete todo');
       }
+    } catch (err) {
+      console.error('Error deleting todo:', err);
+      alert('Failed to delete todo');
     }
   };
 
@@ -116,8 +169,115 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
   const handleAddTodoToCalendar = async (todoId, eventData) => {
     await apiService.addTodoToCalendar(todoId, eventData);
     await fetchRecentTodos();
+    await fetchUpcomingEvents();
     setShowAddToCalendarModal(false);
     setCalendarTodo(null);
+  };
+
+  const getLinkedTodoIdFromEvent = (event) =>
+    event?.linkedTodoId ?? (event?.linkedTodoIds && event.linkedTodoIds[0]);
+
+  const handleRemoveTodoFromCalendar = async (todo) => {
+    const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
+    if (!linkedEventId) return;
+    if (!window.confirm('Remove this todo from the calendar?')) return;
+    try {
+      await apiService.unlinkTodoFromEvent(todo.id, linkedEventId);
+      await fetchRecentTodos();
+      await fetchUpcomingEvents();
+    } catch (err) {
+      console.error('Error unlinking todo:', err);
+      alert('Failed to remove from calendar');
+    }
+  };
+
+  const handleViewCalendarEvent = (todo) => {
+    const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
+    if (!linkedEventId) {
+      setCalendarTodo(todo);
+      setShowAddToCalendarModal(true);
+      return;
+    }
+    onRequestViewCalendarEvent?.(context.id, linkedEventId);
+  };
+
+  const handleAddEvent = () => {
+    setEditingEvent(null);
+    setShowEventModal(true);
+  };
+
+  const handleEditEvent = (eventItem) => {
+    setEditingEvent(eventItem);
+    setShowEventModal(true);
+    setOpenEventMenuId(null);
+  };
+
+  const handleDeleteEvent = async (eventItem) => {
+    try {
+      const deleted = await deleteEventWithConfirmation(eventItem.id, eventItem, apiService);
+      if (deleted) {
+        await fetchUpcomingEvents();
+        await fetchRecentTodos();
+        if (onDataUpdate) {
+          onDataUpdate();
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      alert('Failed to delete event');
+    } finally {
+      setOpenEventMenuId(null);
+    }
+  };
+
+  const handleUnlinkEventTodo = async (eventItem) => {
+    const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
+    if (!linkedTodoId) return;
+    if (!window.confirm('Unlink the todo from this event?')) return;
+    try {
+      await apiService.unlinkTodoFromEvent(linkedTodoId, eventItem.id);
+      await fetchUpcomingEvents();
+      await fetchRecentTodos();
+    } catch (err) {
+      console.error('Error unlinking todo from event:', err);
+      alert('Failed to unlink todo from event');
+    } finally {
+      setOpenEventMenuId(null);
+    }
+  };
+
+  const handleViewLinkedTodo = (eventItem) => {
+    const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
+    if (!linkedTodoId) return;
+    onRequestViewLinkedTodo?.(context.id, linkedTodoId);
+    setOpenEventMenuId(null);
+  };
+
+  const handleViewEventDetails = (eventItem) => {
+    onRequestViewCalendarEvent?.(context.id, eventItem.id);
+    setOpenEventMenuId(null);
+  };
+
+  const handleSaveEvent = async (eventData) => {
+    try {
+      if (editingEvent) {
+        await apiService.updateEvent(editingEvent.id, eventData);
+      } else {
+        await apiService.createEvent({
+          ...eventData,
+          contextId: context.id
+        });
+      }
+      await fetchUpcomingEvents();
+      setShowEventModal(false);
+      setEditingEvent(null);
+      if (onDataUpdate) {
+        onDataUpdate();
+      }
+    } catch (err) {
+      console.error('Error saving event:', err);
+      alert('Failed to save event');
+    }
   };
 
   if (loading) {
@@ -246,11 +406,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
       {/* Recent Activity Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Transactions */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-10">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Wallet size={20} className="text-slate-700" />
-            Recent Transactions
-          </h3>
+        <OverviewCard title="Recent Transactions" icon={Wallet}>
           {recentTransactions && recentTransactions.length > 0 ? (
             <div className="space-y-2">
               {recentTransactions.map(transaction => (
@@ -354,21 +510,24 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
               ))}
             </div>
           ) : (
-            <p className="text-slate-500 text-sm">No transactions yet</p>
+            <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
+              <Wallet size={48} className="text-slate-300" />
+              <p className="text-slate-500 text-sm">No transactions yet</p>
+              <p className="text-slate-400 text-xs">Track finances to see recent activity.</p>
+            </div>
           )}
-        </div>
+        </OverviewCard>
 
         {/* Recent Todos */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-10">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckSquare size={20} className="text-slate-700" />
-              Active Todos
-            </div>
+        <OverviewCard
+          title="Active Todos"
+          icon={CheckSquare}
+          rightSlot={
             <span className="text-sm font-normal text-slate-500">
               {recentTodos.length} {recentTodos.length === 1 ? 'todo' : 'todos'}
             </span>
-          </h3>
+          }
+        >
           {todosLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -494,23 +653,50 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
                             <Edit2 size={12} />
                             Edit
                           </button>
+                          {todo.calendarEventId || (todo.calendarEventIds && todo.calendarEventIds.length) ? (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.currentTarget.parentElement.classList.add('hidden');
+                                  handleViewCalendarEvent(todo);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                              >
+                                <Calendar size={12} />
+                                View Calendar Event
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.currentTarget.parentElement.classList.add('hidden');
+                                  handleRemoveTodoFromCalendar(todo);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                              >
+                                <Unlink size={12} />
+                                Remove from Calendar
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.currentTarget.parentElement.classList.add('hidden');
+                                setCalendarTodo(todo);
+                                setShowAddToCalendarModal(true);
+                              }}
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                            >
+                              <CalendarPlus size={12} />
+                              Add to Calendar
+                            </button>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               e.currentTarget.parentElement.classList.add('hidden');
-                              setCalendarTodo(todo);
-                              setShowAddToCalendarModal(true);
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
-                          >
-                            <CalendarPlus size={12} />
-                            Add to Calendar
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.currentTarget.parentElement.classList.add('hidden');
-                              handleDeleteTodo(todo.id);
+                              handleDeleteTodo(todo);
                             }}
                             className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
                           >
@@ -525,35 +711,130 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
               })}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <CheckSquare size={48} className="text-slate-300 mx-auto mb-2" />
+            <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
+              <CheckSquare size={48} className="text-slate-300" />
               <p className="text-slate-500 text-sm">No active todos</p>
+              <p className="text-slate-400 text-xs">Create todos to see them here.</p>
             </div>
           )}
-        </div>
+        </OverviewCard>
         {/* Recent Ideas */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-0">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Lightbulb size={20} className="text-slate-700" />
-            Recent Ideas
-          </h3>
-          <div className="text-center py-8">
-            <Lightbulb size={48} className="text-slate-300 mx-auto mb-2" />
+        <OverviewCard title="Recent Ideas" icon={Lightbulb}>
+          <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
+            <Lightbulb size={48} className="text-slate-300" />
             <p className="text-slate-500 text-sm">Ideas coming soon</p>
+            <p className="text-slate-400 text-xs">Brainstorming tools are on the way.</p>
           </div>
-        </div>
+        </OverviewCard>
 
         {/* Upcoming Events */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 relative z-0">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Calendar size={20} className="text-slate-700" />
-            Upcoming Events
-          </h3>
-          <div className="text-center py-8">
-            <Calendar size={48} className="text-slate-300 mx-auto mb-2" />
-            <p className="text-slate-500 text-sm">Calendar coming soon</p>
-          </div>
-        </div>
+        <OverviewCard title="Upcoming Events" icon={Calendar}>
+          {eventsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+            </div>
+          ) : upcomingEvents.length > 0 ? (
+            <div className="space-y-3">
+              {upcomingEvents.map((event) => {
+                const linkedTodoId = getLinkedTodoIdFromEvent(event);
+                const isMenuOpen = openEventMenuId === event.id;
+                return (
+                  <div
+                    key={event.id}
+                    className="p-3 bg-slate-50/60 rounded-lg border border-slate-100 flex items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-800 text-sm truncate">{event.title}</p>
+                      <div className="flex items-center gap-3 text-xs text-slate-600 mt-1">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} />
+                          {new Date(event.startDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock size={12} />
+                          {event.allDay
+                            ? 'All day'
+                            : new Date(event.startDate).toLocaleTimeString([], {
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              })}
+                        </span>
+                        {linkedTodoId && (
+                          <span className="text-[10px] uppercase tracking-wide font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                            Linked todo
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenEventMenuId(isMenuOpen ? null : event.id);
+                        }}
+                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                      {isMenuOpen && (
+                        <div className="absolute right-0 mt-1 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[160px] z-20">
+                          <button
+                            onClick={() => handleViewEventDetails(event)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                          >
+                            <Calendar size={12} />
+                            View Event
+                          </button>
+                          <button
+                            onClick={() => handleEditEvent(event)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                          >
+                            <Edit2 size={12} />
+                            Edit Event
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEvent(event)}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
+                          >
+                            <Trash2 size={12} />
+                            Delete Event
+                          </button>
+                          {linkedTodoId && (
+                            <>
+                              <button
+                                onClick={() => handleViewLinkedTodo(event)}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                              >
+                                <CheckSquare size={12} />
+                                View Linked Todo
+                              </button>
+                              <button
+                                onClick={() => handleUnlinkEventTodo(event)}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                              >
+                                <Unlink size={12} />
+                                Unlink Todo
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
+              <Calendar size={48} className="text-slate-300" />
+              <p className="text-slate-500 text-sm">No events scheduled</p>
+              <p className="text-slate-400 text-xs">Use Add Event to schedule one.</p>
+            </div>
+          )}
+        </OverviewCard>
       </div>
 
       {/* Quick Actions - Consistent button colors */}
@@ -563,8 +844,9 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
           onClick={() => setShowAddModal(true)}
           className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow"
         >
-          <Plus size={20} className="mb-2" />
+          <Wallet size={20} className="mb-2" />
           <p className="text-sm font-medium">Add Transaction</p>
+          <p className="text-xs text-white/80 mt-1">Track income or expenses</p>
         </button>
         
         {/* Add Todo button - blue */}
@@ -574,6 +856,7 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
         >
           <CheckSquare size={20} className="mb-2" />
           <p className="text-sm font-medium">Add Todo</p>
+          <p className="text-xs text-white/80 mt-1">Capture a task quickly</p>
         </button>
         
         {/* Disabled buttons - consistent gray style */}
@@ -583,10 +866,13 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
           <p className="text-xs mt-1">Soon</p>
         </button>
         
-        <button className="bg-slate-100 hover:bg-slate-200 text-slate-400 rounded-lg p-4 text-left transition-all shadow-sm cursor-not-allowed" disabled>
+        <button
+          onClick={handleAddEvent}
+          className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow"
+        >
           <Calendar size={20} className="mb-2" />
           <p className="text-sm font-medium">Add Event</p>
-          <p className="text-xs mt-1">Soon</p>
+          <p className="text-xs mt-1 text-white/80">Schedule calendar events</p>
         </button>
       </div>
 
@@ -617,6 +903,17 @@ const ContextOverview = ({ context, stats, recentTransactions, loading, onDataUp
             handleAddTodoToCalendar(calendarTodo.id, eventData);
           }
         }}
+      />
+
+      <EventModal
+        contextId={context.id}
+        event={editingEvent}
+        show={showEventModal}
+        onClose={() => {
+          setShowEventModal(false);
+          setEditingEvent(null);
+        }}
+        onSave={handleSaveEvent}
       />
 
       <EditTodoModal
