@@ -1,16 +1,39 @@
 import { useState, useEffect } from 'react';
-import { Wallet, TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, MoreVertical, Edit2, Trash2, Unlink } from 'lucide-react';
 import StatCard from './StatCard';
 import ExpenseChart from './ExpenseChart';
 import EditTodoModal from './EditTodoModal';
 import AddTodoToCalendarModal from './AddTodoToCalendarModal';
+import EventModal from './EventModal';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
+import { deleteTodoWithConfirmation, deleteEventWithConfirmation } from '../utils/deleteUtils';
+
+const SectionCard = ({
+  title,
+  leadingIcon: LeadingIcon,
+  rightSlot = null,
+  children,
+  className = ''
+}) => (
+  <div className={`bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50 ${className}`}>
+    <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center gap-2">
+        {LeadingIcon && <LeadingIcon size={20} className="text-slate-700" />}
+        <h3 className="text-base sm:text-lg font-semibold text-slate-800">{title}</h3>
+      </div>
+      {rightSlot}
+    </div>
+    {children}
+  </div>
+);
 
 const HomeView = ({ 
   summaryStats, 
   contextData,
-  loading
+  loading,
+  onRequestViewCalendarEvent = () => {},
+  onRequestViewLinkedTodo = () => {}
 }) => {
   const [allTodos, setAllTodos] = useState([]);
   const [todosLoading, setTodosLoading] = useState(true);
@@ -21,10 +44,39 @@ const HomeView = ({
   const [showAddToCalendarModal, setShowAddToCalendarModal] = useState(false);
   const [calendarTodo, setCalendarTodo] = useState(null);
   const [activeTodoMenu, setActiveTodoMenu] = useState(null);
+  const [activeEventMenu, setActiveEventMenu] = useState(null);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
 
   useEffect(() => {
     fetchAllTodos();
   }, []);
+
+  useEffect(() => {
+    fetchUpcomingEvents();
+  }, []);
+
+  const fetchUpcomingEvents = async () => {
+    try {
+      setEventsLoading(true);
+      const start = new Date();
+      const end = new Date();
+      end.setDate(start.getDate() + 7);
+      const format = (date) => date.toISOString().split('T')[0];
+      const response = await apiService.getEvents(format(start), format(end));
+      const upcoming = response.data
+        .filter((event) => new Date(event.startDate) >= start)
+        .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+        .slice(0, 5);
+      setUpcomingEvents(upcoming);
+    } catch (err) {
+      console.error('Error fetching upcoming events:', err);
+    } finally {
+      setEventsLoading(false);
+    }
+  };
 
   const fetchAllTodos = async () => {
     try {
@@ -85,6 +137,38 @@ const HomeView = ({
 
   const closeTodoMenu = () => setActiveTodoMenu(null);
 
+  const openEventMenu = (e, calendarEvent) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    const scrollX = window.scrollX || document.documentElement.scrollLeft;
+    const menuWidth = 190;
+    const menuHeight = 200;
+    let top = rect.bottom + 4;
+    let left = rect.left;
+
+    const viewportBottom = window.innerHeight;
+    if (top + menuHeight > viewportBottom - 8) {
+      top = rect.top - menuHeight - 4;
+    }
+    if (top < 8) top = 8;
+
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = window.innerWidth - menuWidth - 8;
+    }
+    if (left < 8) left = 8;
+
+    setActiveEventMenu({
+      event: calendarEvent,
+      style: {
+        top: top + scrollY,
+        left: left + scrollX,
+      },
+    });
+  };
+
+  const closeEventMenu = () => setActiveEventMenu(null);
+
   const handleMarkTodoAsDone = async (todoId) => {
     try {
       await apiService.updateTodo(todoId, { status: 'done' });
@@ -96,15 +180,15 @@ const HomeView = ({
     }
   };
 
-  const handleDeleteTodo = async (todoId) => {
-    if (window.confirm('Are you sure you want to delete this todo?')) {
-      try {
-        await apiService.deleteTodo(todoId);
+  const handleDeleteTodo = async (todo) => {
+    try {
+      const deleted = await deleteTodoWithConfirmation(todo.id, todo, apiService);
+      if (deleted) {
         fetchAllTodos();
-      } catch (err) {
-        console.error('Error deleting todo:', err);
-        alert('Failed to delete todo');
       }
+    } catch (err) {
+      console.error('Error deleting todo:', err);
+      alert('Failed to delete todo');
     }
   };
 
@@ -123,8 +207,118 @@ const HomeView = ({
   const handleAddTodoToCalendar = async (todoId, eventData) => {
     await apiService.addTodoToCalendar(todoId, eventData);
     await fetchAllTodos();
+    await fetchUpcomingEvents();
     setShowAddToCalendarModal(false);
     setCalendarTodo(null);
+  };
+
+  const handleViewCalendarEvent = (todo) => {
+    const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
+    if (!linkedEventId) {
+      setCalendarTodo(todo);
+      setShowAddToCalendarModal(true);
+      return;
+    }
+    const contextId = todo.contextId ?? todo.context_id;
+    if (contextId) {
+      onRequestViewCalendarEvent?.(contextId, linkedEventId);
+    }
+  };
+
+  const handleRemoveTodoFromCalendar = async (todo) => {
+    const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
+    if (!linkedEventId) return;
+    if (!window.confirm('Remove this todo from the calendar?')) return;
+    try {
+      await apiService.unlinkTodoFromEvent(todo.id, linkedEventId);
+      await fetchAllTodos();
+      await fetchUpcomingEvents();
+    } catch (err) {
+      console.error('Error removing todo from calendar:', err);
+      alert('Failed to remove from calendar');
+    }
+  };
+
+  const getLinkedTodoIdFromEvent = (event) =>
+    event?.linkedTodoId ?? (event?.linkedTodoIds && event.linkedTodoIds[0]);
+
+  const getEventContextId = (event) =>
+    event?.contextId ?? event?.context_id ?? null;
+
+  const handleViewEvent = (eventItem) => {
+    const contextId = getEventContextId(eventItem);
+    if (contextId) {
+      onRequestViewCalendarEvent?.(contextId, eventItem.id);
+    }
+    setActiveEventMenu(null);
+  };
+
+  const handleEditEvent = (eventItem) => {
+    setEditingEvent(eventItem);
+    setShowEventModal(true);
+    setActiveEventMenu(null);
+  };
+
+  const handleSaveEvent = async (eventData) => {
+    if (!editingEvent) return;
+    try {
+      await apiService.updateEvent(editingEvent.id, {
+        ...eventData,
+        contextId: getEventContextId(editingEvent),
+      });
+      await fetchUpcomingEvents();
+      setShowEventModal(false);
+      setEditingEvent(null);
+    } catch (err) {
+      console.error('Error saving event:', err);
+      alert('Failed to save event');
+    }
+  };
+
+  const handleDeleteEvent = async (eventItem) => {
+    try {
+      const deleted = await deleteEventWithConfirmation(eventItem.id, eventItem, apiService);
+      if (deleted) {
+        await fetchUpcomingEvents();
+        await fetchAllTodos();
+      }
+    } catch (err) {
+      console.error('Error deleting event:', err);
+      alert('Failed to delete event');
+    } finally {
+      setActiveEventMenu(null);
+    }
+  };
+
+  const handleUnlinkEventFromTodo = async (eventItem) => {
+    const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
+    if (!linkedTodoId) return;
+    if (!window.confirm('Unlink the todo from this event?')) return;
+    try {
+      await apiService.unlinkTodoFromEvent(linkedTodoId, eventItem.id);
+      await fetchUpcomingEvents();
+      await fetchAllTodos();
+    } catch (err) {
+      console.error('Error unlinking todo:', err);
+      alert('Failed to unlink todo from event');
+    } finally {
+      setActiveEventMenu(null);
+    }
+  };
+
+  const handleViewLinkedTodo = (eventItem) => {
+    const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
+    if (!linkedTodoId) return;
+    const contextId = getEventContextId(eventItem);
+    if (contextId) {
+      onRequestViewLinkedTodo?.(contextId, linkedTodoId);
+    }
+    setActiveEventMenu(null);
+  };
+
+  const handleCloseEventModal = () => {
+    setShowEventModal(false);
+    setEditingEvent(null);
   };
 
   const getTodoStats = () => {
@@ -179,20 +373,18 @@ const HomeView = ({
       {/* Main Content Grid - Expenses Chart + Active Todos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Expenses by Context */}
-        <ExpenseChart data={contextData} title="Expenses by Context" />
+        <ExpenseChart data={contextData} title="Expenses by Context" leadingIcon={Wallet} />
         
         {/* Active Todos List */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
-          <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckSquare size={20} className="text-slate-700" />
-              Active Todos
-            </div>
+        <SectionCard
+          title="Active Todos"
+          leadingIcon={CheckSquare}
+          rightSlot={
             <span className="text-sm font-normal text-slate-500">
               {activeTodoCount} {activeTodoCount === 1 ? 'todo' : 'todos'}
             </span>
-          </h3>
-          
+          }
+        >
           {todosLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -297,13 +489,13 @@ const HomeView = ({
               })}
             </div>
           ) : (
-            <div className="text-center py-8">
-              <CheckSquare size={48} className="text-slate-300 mx-auto mb-2" />
+            <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
+              <CheckSquare size={48} className="text-slate-300" />
               <p className="text-slate-500 text-sm">No active todos</p>
-              <p className="text-slate-400 text-xs mt-1">Create todos in your contexts</p>
+              <p className="text-slate-400 text-xs">Create todos in your contexts</p>
             </div>
           )}
-        </div>
+        </SectionCard>
       </div>
 
       {/* Getting Started - Now below the main content */}
@@ -350,27 +542,68 @@ const HomeView = ({
         </div>
       </div>
 
-      {/* Coming Soon Preview */}
-      <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-xl p-6 border border-slate-200/50">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Coming Soon</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 text-center border border-slate-200/50">
-            <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-2">
-              <Lightbulb size={24} className="text-purple-600" />
-            </div>
-            <h4 className="font-semibold text-slate-800 mb-1">Ideas</h4>
-            <p className="text-xs text-slate-600">Capture and organize thoughts</p>
+      {/* Upcoming Events */}
+      <SectionCard
+        title="Upcoming Events"
+        leadingIcon={Calendar}
+      >
+        {eventsLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
           </div>
-
-          <div className="bg-white/60 backdrop-blur-sm rounded-lg p-4 text-center border border-slate-200/50">
-            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-2">
-              <Calendar size={24} className="text-orange-600" />
-            </div>
-            <h4 className="font-semibold text-slate-800 mb-1">Calendar</h4>
-            <p className="text-xs text-slate-600">Schedule events and deadlines</p>
+        ) : upcomingEvents.length > 0 ? (
+          <div className="space-y-3">
+            {upcomingEvents.map((eventItem) => {
+              const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
+              return (
+                <div
+                  key={eventItem.id}
+                  className="p-3 bg-slate-50/70 rounded-lg border border-slate-100 flex items-start justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-800 text-sm truncate">{eventItem.title}</p>
+                    <div className="flex items-center gap-3 text-xs text-slate-600 mt-1">
+                      <span className="flex items-center gap-1">
+                        <Calendar size={12} />
+                        {new Date(eventItem.startDate).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric'
+                        })}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {eventItem.allDay
+                          ? 'All day'
+                          : new Date(eventItem.startDate).toLocaleTimeString([], {
+                              hour: 'numeric',
+                              minute: '2-digit'
+                            })}
+                      </span>
+                      {linkedTodoId && (
+                        <span className="text-[10px] uppercase tracking-wide font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                          Linked todo
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => openEventMenu(e, eventItem)}
+                    className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors"
+                  >
+                    <MoreVertical size={14} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        </div>
-      </div>
+        ) : (
+          <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
+            <Calendar size={40} className="text-slate-300" />
+            <p className="text-slate-500 text-sm">No events scheduled this week.</p>
+            <p className="text-slate-400 text-xs">Add events to keep your schedule aligned.</p>
+          </div>
+        )}
+      </SectionCard>
 
       {activeTodoMenu && (
         <>
@@ -390,20 +623,54 @@ const HomeView = ({
               <Edit2 size={12} />
               Edit
             </button>
+            {(() => {
+              const linkedEventId =
+                activeTodoMenu.todo.calendarEventId ??
+                (activeTodoMenu.todo.calendarEventIds && activeTodoMenu.todo.calendarEventIds[0]);
+              const hasLinkedEvent = Boolean(linkedEventId);
+              if (hasLinkedEvent) {
+                return (
+                  <>
+                    <button
+                      onClick={() => {
+                        handleViewCalendarEvent(activeTodoMenu.todo);
+                        closeTodoMenu();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                    >
+                      <Calendar size={12} />
+                      View Calendar Event
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleRemoveTodoFromCalendar(activeTodoMenu.todo);
+                        closeTodoMenu();
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                    >
+                      <Unlink size={12} />
+                      Remove from Calendar
+                    </button>
+                  </>
+                );
+              }
+              return (
+                <button
+                  onClick={() => {
+                    setCalendarTodo(activeTodoMenu.todo);
+                    setShowAddToCalendarModal(true);
+                    closeTodoMenu();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                >
+                  <CalendarPlus size={12} />
+                  Add to Calendar
+                </button>
+              );
+            })()}
             <button
               onClick={() => {
-                setCalendarTodo(activeTodoMenu.todo);
-                setShowAddToCalendarModal(true);
-                closeTodoMenu();
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
-            >
-              <CalendarPlus size={12} />
-              Add to Calendar
-            </button>
-            <button
-              onClick={() => {
-                handleDeleteTodo(activeTodoMenu.todo.id);
+                handleDeleteTodo(activeTodoMenu.todo);
                 closeTodoMenu();
               }}
               className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
@@ -415,6 +682,55 @@ const HomeView = ({
         </>
       )}
 
+      {activeEventMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={closeEventMenu} />
+          <div
+            className="fixed z-50 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[180px]"
+            style={activeEventMenu.style}
+          >
+            <button
+              onClick={() => handleViewEvent(activeEventMenu.event)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+            >
+              <Calendar size={12} />
+              View Event
+            </button>
+            <button
+              onClick={() => handleEditEvent(activeEventMenu.event)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+            >
+              <Edit2 size={12} />
+              Edit Event
+            </button>
+            <button
+              onClick={() => handleDeleteEvent(activeEventMenu.event)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
+            >
+              <Trash2 size={12} />
+              Delete Event
+            </button>
+            {getLinkedTodoIdFromEvent(activeEventMenu.event) && (
+              <>
+                <button
+                  onClick={() => handleViewLinkedTodo(activeEventMenu.event)}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                >
+                  <CheckSquare size={12} />
+                  View Linked Todo
+                </button>
+                <button
+                  onClick={() => handleUnlinkEventFromTodo(activeEventMenu.event)}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                >
+                  <Unlink size={12} />
+                  Unlink Todo
+                </button>
+              </>
+            )}
+          </div>
+        </>
+      )}
       <AddTodoToCalendarModal
         showModal={showAddToCalendarModal}
         setShowModal={setShowAddToCalendarModal}
@@ -431,6 +747,14 @@ const HomeView = ({
         setShowModal={setShowEditModal}
         todo={editingTodo}
         onUpdate={handleEditTodo}
+      />
+
+      <EventModal
+        contextId={getEventContextId(editingEvent)}
+        event={editingEvent}
+        show={showEventModal}
+        onClose={handleCloseEventModal}
+        onSave={handleSaveEvent}
       />
     </div>
   );

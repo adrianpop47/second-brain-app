@@ -1,12 +1,15 @@
 import { useState } from 'react';
-import { MoreVertical, Trash2, Calendar, CalendarPlus, Clock, Flag, Tag, Edit2 } from 'lucide-react';
+import { MoreVertical, Trash2, Calendar, CalendarPlus, Clock, Flag, Tag, Edit2, Unlink } from 'lucide-react';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 
 const TodoCard = ({ 
   todo, 
   onDeleteTodo, 
   onEditRequest,
-  onAddToCalendarRequest
+  onAddToCalendarRequest,
+  onViewCalendarEvent,
+  onRemoveFromCalendar,
+  isFocused = false
 }) => {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -41,11 +44,18 @@ const TodoCard = ({
       })
     : '';
 
+  const hasLinkedEvent = Boolean(
+    todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0])
+  );
+
   return (
     <div
       draggable
       onDragStart={handleDragStart}
-      className="bg-white rounded-lg p-3 shadow-sm border border-slate-200/50 hover:shadow-md transition-all cursor-move group"
+      data-todo-highlight={isFocused ? 'true' : undefined}
+      className={`bg-white rounded-lg p-3 shadow-sm border transition-all cursor-move group ${
+        isFocused ? 'border-indigo-400 ring-2 ring-indigo-300' : 'border-slate-200/50 hover:shadow-md'
+      }`}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -74,19 +84,44 @@ const TodoCard = ({
                   <Edit2 size={14} />
                   Edit
                 </button>
+                {!hasLinkedEvent ? (
+                  <button
+                    onClick={() => {
+                      onAddToCalendarRequest?.(todo);
+                      setShowMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-sm text-slate-700 whitespace-nowrap"
+                  >
+                    <CalendarPlus size={14} />
+                    Add to Calendar
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        onViewCalendarEvent?.(todo);
+                        setShowMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-sm text-slate-700 whitespace-nowrap"
+                    >
+                      <Calendar size={14} />
+                      View Calendar Event
+                    </button>
+                    <button
+                      onClick={() => {
+                        onRemoveFromCalendar?.(todo);
+                        setShowMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-sm text-slate-700 whitespace-nowrap"
+                    >
+                      <Unlink size={14} />
+                      Remove from Calendar
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => {
-                    onAddToCalendarRequest?.(todo);
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-sm text-slate-700 whitespace-nowrap"
-                >
-                  <CalendarPlus size={14} />
-                  Add to Calendar
-                </button>
-                <button
-                  onClick={() => {
-                    onDeleteTodo(todo.id);
+                    onDeleteTodo(todo);
                     setShowMenu(false);
                   }}
                   className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-sm text-red-600"

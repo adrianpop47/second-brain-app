@@ -11,6 +11,9 @@ const TodoColumn = ({
   onUpdateTodo,
   onEditRequest,
   onAddToCalendarRequest,
+  onViewCalendarEvent,
+  onRemoveFromCalendar,
+  focusedTodoId,
   color = 'slate' 
 }) => {
   const [dragOverColumn, setDragOverColumn] = useState(false);
@@ -112,6 +115,9 @@ const TodoColumn = ({
               onUpdateTodo={onUpdateTodo}
               onEditRequest={onEditRequest}
               onAddToCalendarRequest={onAddToCalendarRequest}
+              onViewCalendarEvent={onViewCalendarEvent}
+              onRemoveFromCalendar={onRemoveFromCalendar}
+              isFocused={focusedTodoId === todo.id}
             />
           ))
         )}

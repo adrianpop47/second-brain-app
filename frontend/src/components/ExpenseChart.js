@@ -1,14 +1,24 @@
 import { PieChart as RePieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { Wallet } from 'lucide-react';
 
 const COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4', '#94A3B8'];
 
-const ExpenseChart = ({ data, title = 'Expenses by Tag' }) => {
+const ExpenseChart = ({ data, title = 'Expenses by Tag', leadingIcon: LeadingIcon = null }) => {
+  const renderTitle = () => (
+    <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+      {LeadingIcon && <LeadingIcon size={18} className="text-slate-600" />}
+      {title}
+    </h3>
+  );
+
   if (!data || data.length === 0) {
     return (
       <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
-        <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4">{title}</h3>
-        <div className="flex items-center justify-center h-[220px]">
+        {renderTitle()}
+        <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
+          <Wallet size={48} className="text-slate-300" />
           <p className="text-slate-500 text-sm">No expenses yet</p>
+          <p className="text-slate-400 text-xs">Add expenses to see the breakdown.</p>
         </div>
       </div>
     );
@@ -16,7 +26,7 @@ const ExpenseChart = ({ data, title = 'Expenses by Tag' }) => {
 
   return (
     <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
-      <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4">{title}</h3>
+      {renderTitle()}
       <ResponsiveContainer width="100%" height={220}>
         <RePieChart>
           <Pie

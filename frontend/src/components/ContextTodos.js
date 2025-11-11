@@ -6,6 +6,7 @@ import EditTodoModal from './EditTodoModal';
 import AddTodoToCalendarModal from './AddTodoToCalendarModal';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
+import { deleteTodoWithConfirmation } from '../utils/deleteUtils';
 
 const STATUSES = {
   TODO: 'todo',
@@ -13,7 +14,12 @@ const STATUSES = {
   DONE: 'done'
 };
 
-const ContextTodos = ({ context }) => {
+const ContextTodos = ({
+  context,
+  focusedTodoId = null,
+  onClearFocus = () => {},
+  onRequestViewCalendarEvent = () => {}
+}) => {
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -31,6 +37,16 @@ const ContextTodos = ({ context }) => {
     fetchTodos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.id]);
+
+  useEffect(() => {
+    if (!focusedTodoId || !onClearFocus) return;
+    const handleClick = (event) => {
+      if (event.target.closest('[data-todo-highlight="true"]')) return;
+      onClearFocus();
+    };
+    document.addEventListener('pointerdown', handleClick);
+    return () => document.removeEventListener('pointerdown', handleClick);
+  }, [focusedTodoId, onClearFocus]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -53,6 +69,28 @@ const ContextTodos = ({ context }) => {
     } catch (err) {
       console.error('Error fetching todos:', err);
       setLoading(false);
+    }
+  };
+
+  const handleViewCalendarEvent = (todo) => {
+    const linkedId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
+    if (linkedId) {
+      onRequestViewCalendarEvent?.(context.id, linkedId);
+    } else {
+      openCalendarModal(todo);
+    }
+  };
+
+  const handleRemoveFromCalendar = async (todo) => {
+    const linkedId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
+    if (!linkedId) return;
+    if (!window.confirm('Remove this todo from the calendar?')) return;
+    try {
+      await apiService.unlinkTodoFromEvent(todo.id, linkedId);
+      await fetchTodos();
+    } catch (err) {
+      console.error('Error unlinking todo from event:', err);
+      alert('Failed to remove from calendar');
     }
   };
 
@@ -87,15 +125,15 @@ const ContextTodos = ({ context }) => {
     }
   };
 
-  const deleteTodo = async (todoId) => {
-    if (window.confirm('Are you sure you want to delete this todo?')) {
-      try {
-        await apiService.deleteTodo(todoId);
+  const deleteTodo = async (todo) => {
+    try {
+      const deleted = await deleteTodoWithConfirmation(todo.id, todo, apiService);
+      if (deleted) {
         await fetchTodos();
-      } catch (err) {
-        console.error('Error deleting todo:', err);
-        alert('Failed to delete todo');
       }
+    } catch (err) {
+      console.error('Error deleting todo:', err);
+      alert('Failed to delete todo');
     }
   };
 
@@ -323,6 +361,9 @@ const ContextTodos = ({ context }) => {
           color="slate"
           onEditRequest={openEditModal}
           onAddToCalendarRequest={openCalendarModal}
+          onViewCalendarEvent={handleViewCalendarEvent}
+          onRemoveFromCalendar={handleRemoveFromCalendar}
+          focusedTodoId={focusedTodoId}
         />
         <TodoColumn
           title="In Progress"
@@ -334,6 +375,9 @@ const ContextTodos = ({ context }) => {
           color="amber"
           onEditRequest={openEditModal}
           onAddToCalendarRequest={openCalendarModal}
+          onViewCalendarEvent={handleViewCalendarEvent}
+          onRemoveFromCalendar={handleRemoveFromCalendar}
+          focusedTodoId={focusedTodoId}
         />
         <TodoColumn
           title="Done"
@@ -345,6 +389,9 @@ const ContextTodos = ({ context }) => {
           color="emerald"
           onEditRequest={openEditModal}
           onAddToCalendarRequest={openCalendarModal}
+          onViewCalendarEvent={handleViewCalendarEvent}
+          onRemoveFromCalendar={handleRemoveFromCalendar}
+          focusedTodoId={focusedTodoId}
         />
       </div>
 

@@ -589,6 +589,14 @@ def update_event(event_id):
             else:
                 event.recurrence_end_date = None
         
+        # Keep linked todos in sync with event updates
+        if event.linked_todos:
+            for todo in event.linked_todos:
+                todo.title = event.title
+                if event.description is not None:
+                    todo.description = event.description
+                todo.tags = event.tags or []
+        
         db.session.commit()
         
         return jsonify({
@@ -616,11 +624,9 @@ def delete_event(event_id):
                 'message': 'Event not found'
             }), 404
         
-        # Check if any todo is linked to this event
-        linked_todo = Todo.query.filter_by(calendar_event_id=event_id).first()
-        if linked_todo:
-            # Unlink the todo
-            linked_todo.calendar_event_id = None
+        # Detach any linked todos via the association table
+        if event.linked_todos:
+            event.linked_todos = []
         
         db.session.delete(event)
         db.session.commit()
@@ -774,6 +780,14 @@ def update_todo(todo_id):
             for event in todo.calendar_events:
                 event.completed = True
         
+        # Keep linked events in sync with todo title/description/tags
+        if todo.calendar_events:
+            for event in todo.calendar_events:
+                event.title = todo.title
+                if todo.description:
+                    event.description = todo.description
+                event.tags = todo.tags or []
+        
         db.session.commit()
         
         return jsonify({
@@ -837,6 +851,11 @@ def add_todo_to_calendar(todo_id):
         start_datetime = datetime.combine(start_date.date(), time_obj)
         end_datetime = start_datetime + timedelta(hours=duration_hours)
         
+        # Ensure todo only has one linked event
+        for existing_event in list(todo.calendar_events):
+            todo.calendar_events.remove(existing_event)
+            db.session.delete(existing_event)
+
         # Create event
         new_event = Event(
             context_id=todo.context_id,
@@ -870,6 +889,35 @@ def add_todo_to_calendar(todo_id):
         return jsonify({
             'success': False,
             'message': f'Error adding todo to calendar: {str(e)}'
+        }), 500
+
+
+@app.route('/api/todos/<int:todo_id>/events/<int:event_id>/unlink', methods=['DELETE'])
+def unlink_todo_from_event(todo_id, event_id):
+    try:
+        todo = Todo.query.get(todo_id)
+        event = Event.query.get(event_id)
+
+        if not todo or not event:
+            return jsonify({
+                'success': False,
+                'message': 'Todo or Event not found'
+            }), 404
+
+        if event in todo.calendar_events:
+            todo.calendar_events.remove(event)
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Todo unlinked from event'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error unlinking todo and event: {str(e)}'
         }), 500
 
 
