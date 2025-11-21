@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, Plus, MoreVertical, Edit2, Trash2, Unlink } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, MoreVertical, Edit2, Trash2, Unlink } from 'lucide-react';
 import AddTransactionModal from './AddTransactionModal';
 import AddTodoModal from './AddTodoModal';
 import EditTodoModal from './EditTodoModal';
@@ -366,7 +366,7 @@ const ContextOverview = ({
       <div className="flex items-center gap-3">
         <div>
           <h2 className="text-2xl font-semibold text-slate-800">{context.name}</h2>
-          <p className="text-sm text-slate-500">Context Overview</p>
+          <p className="text-sm text-slate-500">Field Overview</p>
         </div>
       </div>
 

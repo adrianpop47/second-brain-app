@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Calendar as CalendarIcon, Clock, Tag as TagIcon, Repeat, ChevronRight } from 'lucide-react';
 import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
+import DurationPicker from './DurationPicker';
 
 const RECURRENCE_OPTIONS = [
   { value: 'daily', label: 'Daily' },
@@ -10,6 +11,70 @@ const RECURRENCE_OPTIONS = [
   { value: 'yearly', label: 'Yearly' }
 ];
 
+const formatDate = (dateObj) => {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDateTime = (value) => {
+  if (!value) return null;
+  const [datePart, timePart = '00:00:00'] = value.split('T');
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hour, minute, second = '0'] = timePart.split(':');
+  return new Date(year, month - 1, day, Number(hour), Number(minute), Number(second));
+};
+
+const formatTime = (dateObj) => {
+  if (!dateObj) return '';
+  return `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+};
+
+const getDefaultEndDateTime = (dateStr, timeStr, durationHours = 1) => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hour, minute] = timeStr.split(':').map(Number);
+  const dateObj = new Date(year, month - 1, day, hour, minute, 0, 0);
+  const minutesToAdd = Math.max(30, Math.round(durationHours * 60));
+  dateObj.setMinutes(dateObj.getMinutes() + minutesToAdd);
+  const endDateStr = formatDate(dateObj);
+  const endHour = String(dateObj.getHours()).padStart(2, '0');
+  const endMinute = String(dateObj.getMinutes()).padStart(2, '0');
+  return `${endDateStr}T${endHour}:${endMinute}:00`;
+};
+
+const getDurationHoursFromEvent = (eventData) => {
+  if (!eventData) return 1;
+  if (eventData.allDay) return 24;
+  if (typeof eventData.durationHours === 'number') {
+    return Math.max(0.5, Number(eventData.durationHours));
+  }
+  if (eventData.endDate) {
+    const start = parseLocalDateTime(eventData.startDate);
+    const end = parseLocalDateTime(eventData.endDate);
+    if (start && end) {
+      const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      return Math.max(0.5, Math.round(diffHours * 2) / 2);
+    }
+  }
+  return 1;
+};
+
+const snapToQuarterHour = (timeValue) => {
+  if (!timeValue) return '';
+  const [hourStr, minuteStr] = timeValue.split(':');
+  const hours = Number(hourStr);
+  const minutes = Number(minuteStr);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeValue;
+  let totalMinutes = hours * 60 + minutes;
+  totalMinutes = Math.round(totalMinutes / 15) * 15;
+  const maxMinutes = 24 * 60 - 15; // cap at 23:45
+  if (totalMinutes > maxMinutes) totalMinutes = maxMinutes;
+  const snappedHour = Math.floor(totalMinutes / 60);
+  const snappedMinute = totalMinutes % 60;
+  return `${String(snappedHour).padStart(2, '0')}:${String(snappedMinute).padStart(2, '0')}`;
+};
+
 const EventModal = ({
   contextId,
   event = null,
@@ -17,36 +82,7 @@ const EventModal = ({
   onClose,
   onSave
 }) => {
-  const formatDate = (dateObj) => {
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const day = String(dateObj.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
 
-  const parseLocalDateTime = (value) => {
-    if (!value) return null;
-    const [datePart, timePart = '00:00:00'] = value.split('T');
-    const [year, month, day] = datePart.split('-').map(Number);
-    const [hour, minute, second = '0'] = timePart.split(':');
-    return new Date(year, month - 1, day, Number(hour), Number(minute), Number(second));
-  };
-
-  const formatTime = (dateObj) => {
-    if (!dateObj) return '';
-    return `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
-  };
-
-  const getDefaultEndDateTime = (dateStr, timeStr) => {
-    const [year, month, day] = dateStr.split('-').map(Number);
-    const [hour, minute] = timeStr.split(':').map(Number);
-    const dateObj = new Date(year, month - 1, day, hour, minute, 0, 0);
-    dateObj.setMinutes(dateObj.getMinutes() + 60);
-    const endDateStr = formatDate(dateObj);
-    const endHour = String(dateObj.getHours()).padStart(2, '0');
-    const endMinute = String(dateObj.getMinutes()).padStart(2, '0');
-    return `${endDateStr}T${endHour}:${endMinute}:00`;
-  };
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -56,12 +92,14 @@ const EventModal = ({
     tags: [],
     recurring: false,
     recurrenceType: 'weekly',
-    recurrenceEndDate: ''
+    recurrenceEndDate: '',
+    durationHours: 1
   });
   const [tagInput, setTagInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
   const recurrencePickerRef = useRef(null);
+  const previousTimeRef = useRef('');
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -88,12 +126,13 @@ const EventModal = ({
         title: event.title || '',
         description: event.description || '',
         startDate: startDate ? formatDate(startDate) : '',
-        startTime: event.allDay ? '' : formatTime(startDate),
+        startTime: event.allDay ? '' : snapToQuarterHour(formatTime(startDate)),
         allDay: event.allDay || false,
         tags: event.tags || [],
         recurring: event.recurring || false,
         recurrenceType: event.recurrenceType || 'weekly',
-        recurrenceEndDate: event.recurrenceEndDate || ''
+        recurrenceEndDate: event.recurrenceEndDate || '',
+        durationHours: getDurationHoursFromEvent(event)
       });
     } else if (show && !event) {
       // Creating new event - set defaults
@@ -103,12 +142,13 @@ const EventModal = ({
         title: '',
         description: '',
         startDate: formatDate(now),
-        startTime: formatTime(now),
+        startTime: snapToQuarterHour(formatTime(now)),
         allDay: false,
         tags: [],
         recurring: false,
         recurrenceType: 'weekly',
-        recurrenceEndDate: ''
+        recurrenceEndDate: '',
+        durationHours: 1
       });
     }
   }, [show, event]);
@@ -138,11 +178,22 @@ const EventModal = ({
   };
 
   const handleAllDayToggle = () => {
-    setFormData(prev => ({
-      ...prev,
-      allDay: !prev.allDay,
-      startTime: !prev.allDay ? '' : prev.startTime
-    }));
+    setFormData((prev) => {
+      const nextAllDay = !prev.allDay;
+      if (nextAllDay) {
+        previousTimeRef.current = prev.startTime || previousTimeRef.current || '';
+      }
+      const restoredTime = nextAllDay
+        ? ''
+        : previousTimeRef.current || prev.startTime || snapToQuarterHour(formatTime(new Date()));
+      return {
+        ...prev,
+        allDay: nextAllDay,
+        startTime: restoredTime,
+        durationHours:
+          nextAllDay ? 24 : prev.durationHours === 24 ? 1 : prev.durationHours || 1
+      };
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -169,6 +220,8 @@ const EventModal = ({
       // Build datetime strings
       let startDateTime, endDateTime;
 
+      const durationHoursValue = formData.allDay ? 24 : formData.durationHours || 1;
+
       if (formData.allDay) {
         // All-day event - use local date at midnight without timezone conversion
         startDateTime = `${formData.startDate}T00:00:00`;
@@ -176,7 +229,11 @@ const EventModal = ({
       } else {
         // Timed event
         startDateTime = `${formData.startDate}T${formData.startTime}:00`;
-        endDateTime = getDefaultEndDateTime(formData.startDate, formData.startTime);
+        endDateTime = getDefaultEndDateTime(
+          formData.startDate,
+          formData.startTime,
+          durationHoursValue
+        );
       }
 
       const eventData = {
@@ -186,6 +243,7 @@ const EventModal = ({
         startDate: startDateTime,
         endDate: endDateTime,
         allDay: formData.allDay,
+        durationHours: durationHoursValue,
         tags: formData.tags,
         recurring: formData.recurring,
         recurrenceType: formData.recurring ? formData.recurrenceType : null,
@@ -206,7 +264,8 @@ const EventModal = ({
         tags: [],
         recurring: false,
         recurrenceType: 'weekly',
-        recurrenceEndDate: ''
+        recurrenceEndDate: '',
+        durationHours: 1
       });
       setTagInput('');
       setShowRecurrencePicker(false);
@@ -322,10 +381,26 @@ const EventModal = ({
                 </label>
                 <TimePicker
                   value={formData.startTime}
-                  onChange={(time) => setFormData(prev => ({ ...prev, startTime: time }))}
+                  onChange={(time) =>
+                    setFormData((prev) => ({ ...prev, startTime: snapToQuarterHour(time) }))
+                  }
                   onClear={() => setFormData(prev => ({ ...prev, startTime: '' }))}
                   showIcon={false}
                   showClear={false}
+                />
+              </div>
+            )}
+
+            {!formData.allDay && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Duration
+                </label>
+                <DurationPicker
+                  value={formData.durationHours}
+                  onChange={(value) =>
+                    setFormData((prev) => ({ ...prev, durationHours: value }))
+                  }
                 />
               </div>
             )}

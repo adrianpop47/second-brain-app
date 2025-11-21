@@ -111,16 +111,16 @@ const AddTransactionModal = ({
         <div className="border-t border-slate-100 mt-4 mb-5" />
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Context Selector */}
+          {/* Field Selector */}
           {!contextId && contexts.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Context</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Field</label>
               <select
                 value={newTransaction.contextId || ''}
                 onChange={(e) => setNewTransaction(prev => ({ ...prev, contextId: parseInt(e.target.value) }))}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
               >
-                <option value="">Select context</option>
+                <option value="">Select field</option>
                 {contexts.map(ctx => (
                   <option key={ctx.id} value={ctx.id}>
                     {ctx.emoji} {ctx.name}

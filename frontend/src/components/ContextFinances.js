@@ -160,7 +160,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
         <div className="flex items-center gap-3">
           <div>
             <h2 className="text-2xl font-semibold text-slate-800">{context.name} › Finances</h2>
-            <p className="text-sm text-slate-500">Financial tracking for this context</p>
+            <p className="text-sm text-slate-500">Financial tracking for this field</p>
           </div>
         </div>
         <PeriodSelector value={dateRange} onChange={setDateRange} />

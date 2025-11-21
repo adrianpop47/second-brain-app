@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Wallet, TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, MoreVertical, Edit2, Trash2, Unlink } from 'lucide-react';
 import StatCard from './StatCard';
 import ExpenseChart from './ExpenseChart';
@@ -49,6 +49,8 @@ const HomeView = ({
   const [eventsLoading, setEventsLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+  const todoMenuRef = useRef(null);
+  const eventMenuRef = useRef(null);
 
   useEffect(() => {
     fetchAllTodos();
@@ -57,6 +59,20 @@ const HomeView = ({
   useEffect(() => {
     fetchUpcomingEvents();
   }, []);
+
+  useEffect(() => {
+    if (!activeTodoMenu && !activeEventMenu) return undefined;
+    const handleClickOutside = (e) => {
+      if (activeTodoMenu && todoMenuRef.current && !todoMenuRef.current.contains(e.target)) {
+        setActiveTodoMenu(null);
+      }
+      if (activeEventMenu && eventMenuRef.current && !eventMenuRef.current.contains(e.target)) {
+        setActiveEventMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [activeTodoMenu, activeEventMenu]);
 
   const fetchUpcomingEvents = async () => {
     try {
@@ -117,57 +133,6 @@ const HomeView = ({
       setTodosLoading(false);
     }
   };
-
-  const openTodoMenu = (event, todo) => {
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const menuHeight = 120;
-    const menuWidth = 160;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const top = spaceBelow >= menuHeight ? rect.bottom : rect.top - menuHeight;
-    const left = Math.max(
-      8,
-      Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8)
-    );
-    setActiveTodoMenu({
-      todo,
-      style: { top, left }
-    });
-  };
-
-  const closeTodoMenu = () => setActiveTodoMenu(null);
-
-  const openEventMenu = (e, calendarEvent) => {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const scrollY = window.scrollY || document.documentElement.scrollTop;
-    const scrollX = window.scrollX || document.documentElement.scrollLeft;
-    const menuWidth = 190;
-    const menuHeight = 200;
-    let top = rect.bottom + 4;
-    let left = rect.left;
-
-    const viewportBottom = window.innerHeight;
-    if (top + menuHeight > viewportBottom - 8) {
-      top = rect.top - menuHeight - 4;
-    }
-    if (top < 8) top = 8;
-
-    if (left + menuWidth > window.innerWidth - 8) {
-      left = window.innerWidth - menuWidth - 8;
-    }
-    if (left < 8) left = 8;
-
-    setActiveEventMenu({
-      event: calendarEvent,
-      style: {
-        top: top + scrollY,
-        left: left + scrollX,
-      },
-    });
-  };
-
-  const closeEventMenu = () => setActiveEventMenu(null);
 
   const handleMarkTodoAsDone = async (todoId) => {
     try {
@@ -269,6 +234,7 @@ const HomeView = ({
       await fetchUpcomingEvents();
       setShowEventModal(false);
       setEditingEvent(null);
+      setActiveEventMenu(null);
     } catch (err) {
       console.error('Error saving event:', err);
       alert('Failed to save event');
@@ -342,7 +308,7 @@ const HomeView = ({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-slate-800">Home</h2>
-          <p className="text-sm text-slate-500">All contexts overview</p>
+          <p className="text-sm text-slate-500">All fields overview</p>
         </div>
       </div>
 
@@ -372,8 +338,8 @@ const HomeView = ({
 
       {/* Main Content Grid - Expenses Chart + Active Todos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Expenses by Context */}
-        <ExpenseChart data={contextData} title="Expenses by Context" leadingIcon={Wallet} />
+        {/* Expenses by Field */}
+        <ExpenseChart data={contextData} title="Expenses by Field" leadingIcon={Wallet} />
         
         {/* Active Todos List */}
         <SectionCard
@@ -390,7 +356,7 @@ const HomeView = ({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
           ) : allTodos.length > 0 ? (
-            <div className="space-y-2 max-h-[250px] overflow-y-auto pb-20">
+            <div className="space-y-2 pb-2">
               {allTodos.map((todo) => {
                 const isOverdue = isTodoOverdue(todo.dueDate, todo.dueTime, todo.status);
                 const formattedDueDate = todo.dueDate
@@ -475,13 +441,100 @@ const HomeView = ({
                       )}
                       
                       {/* Todo Menu */}
-                      <div className="relative opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="relative">
                         <button
-                          onClick={(e) => openTodoMenu(e, todo)}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const key = `${todo.contextId || todo.context_id}-${todo.id}`;
+                            if (activeTodoMenu?.id === key) {
+                              setActiveTodoMenu(null);
+                              return;
+                            }
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            const position = spaceBelow < 160 ? 'top' : 'bottom';
+                            setActiveTodoMenu({ id: key, position });
+                          }}
                           className="p-1 hover:bg-slate-200 rounded transition-colors"
                         >
                           <MoreVertical size={14} className="text-slate-500" />
                         </button>
+                        {(() => {
+                          const key = `${todo.contextId || todo.context_id}-${todo.id}`;
+                          if (activeTodoMenu?.id !== key) return null;
+                          const linkedEventId =
+                            todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
+                          const hasLinkedEvent = Boolean(linkedEventId);
+                          return (
+                            <div
+                              ref={todoMenuRef}
+                              className={`absolute right-0 ${
+                                activeTodoMenu.position === 'top'
+                                  ? 'bottom-full -mb-1'
+                                  : 'top-full mt-1'
+                              } bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[150px] z-50`}
+                            >
+                              <button
+                                onClick={() => {
+                                  setEditingTodo(todo);
+                                  setShowEditModal(true);
+                                  setActiveTodoMenu(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                              >
+                                <Edit2 size={12} />
+                                Edit
+                              </button>
+                              {hasLinkedEvent ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      handleViewCalendarEvent(todo);
+                                      setActiveTodoMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                                  >
+                                    <Calendar size={12} />
+                                    View Calendar Event
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleRemoveTodoFromCalendar(todo);
+                                      setActiveTodoMenu(null);
+                                    }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                                  >
+                                    <Unlink size={12} />
+                                    Remove from Calendar
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setCalendarTodo(todo);
+                                    setShowAddToCalendarModal(true);
+                                    setActiveTodoMenu(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
+                                >
+                                  <CalendarPlus size={12} />
+                                  Add to Calendar
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  handleDeleteTodo(todo);
+                                  setActiveTodoMenu(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
+                              >
+                                <Trash2 size={12} />
+                                Delete
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -492,7 +545,7 @@ const HomeView = ({
             <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
               <CheckSquare size={48} className="text-slate-300" />
               <p className="text-slate-500 text-sm">No active todos</p>
-              <p className="text-slate-400 text-xs">Create todos in your contexts</p>
+              <p className="text-slate-400 text-xs">Create todos in your fields</p>
             </div>
           )}
         </SectionCard>
@@ -507,7 +560,7 @@ const HomeView = ({
               1
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-800">Create Contexts</p>
+              <p className="text-sm font-medium text-slate-800">Create Fields</p>
               <p className="text-xs text-slate-600 mt-0.5">Organize your life into different areas (Work, Health, Personal, etc.)</p>
             </div>
           </div>
@@ -518,7 +571,7 @@ const HomeView = ({
             </div>
             <div>
               <p className="text-sm font-medium text-slate-800">Track Your Finances</p>
-              <p className="text-xs text-slate-600 mt-0.5">Add income and expenses to each context with custom tags</p>
+              <p className="text-xs text-slate-600 mt-0.5">Add income and expenses to each field with custom tags</p>
             </div>
           </div>
 
@@ -537,7 +590,7 @@ const HomeView = ({
               <Lightbulb size={16} className="text-blue-600" />
               <p className="text-sm font-semibold text-slate-800">Pro Tip</p>
             </div>
-            <p className="text-xs text-slate-600">Click on a context in the sidebar to see detailed stats, finances, and todos. Ideas and Calendar are coming soon!</p>
+            <p className="text-xs text-slate-600">Click on a field in the sidebar to see detailed stats, finances, and todos. Ideas and Calendar are coming soon!</p>
           </div>
         </div>
       </div>
@@ -555,10 +608,11 @@ const HomeView = ({
           <div className="space-y-3">
             {upcomingEvents.map((eventItem) => {
               const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
+              const isOpen = activeEventMenu?.id === eventItem.id;
               return (
                 <div
                   key={eventItem.id}
-                  className="p-3 bg-slate-50/70 rounded-lg border border-slate-100 flex items-start justify-between gap-3"
+                  className="relative p-3 bg-slate-50/70 rounded-lg border border-slate-100 flex items-start justify-between gap-3"
                 >
                   <div className="min-w-0">
                     <p className="font-medium text-slate-800 text-sm truncate">{eventItem.title}</p>
@@ -586,12 +640,75 @@ const HomeView = ({
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => openEventMenu(e, eventItem)}
-                    className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors"
-                  >
-                    <MoreVertical size={14} />
-                  </button>
+                    <div className="relative">
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (activeEventMenu?.id === eventItem.id) {
+                            setActiveEventMenu(null);
+                            return;
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const spaceBelow = window.innerHeight - rect.bottom;
+                          const position = spaceBelow < 200 ? 'top' : 'bottom';
+                          setActiveEventMenu({ id: eventItem.id, position });
+                        }}
+                        className="p-1.5 rounded hover:bg-slate-100 text-slate-500 transition-colors"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                    {isOpen && (
+                      <div
+                        ref={eventMenuRef}
+                        className={`absolute right-0 ${
+                          activeEventMenu.position === 'top'
+                            ? 'bottom-full -mb-1'
+                            : 'top-full mt-1'
+                        } bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[170px] z-50`}
+                      >
+                        <button
+                          onClick={() => handleViewEvent(eventItem)}
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                        >
+                          <Calendar size={12} />
+                          View Event
+                        </button>
+                        <button
+                          onClick={() => handleEditEvent(eventItem)}
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                        >
+                          <Edit2 size={12} />
+                          Edit Event
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEvent(eventItem)}
+                          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
+                        >
+                          <Trash2 size={12} />
+                          Delete Event
+                        </button>
+                        {linkedTodoId && (
+                          <>
+                            <button
+                              onClick={() => handleViewLinkedTodo(eventItem)}
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                            >
+                              <CheckSquare size={12} />
+                              View Linked Todo
+                            </button>
+                            <button
+                              onClick={() => handleUnlinkEventFromTodo(eventItem)}
+                              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
+                            >
+                              <Unlink size={12} />
+                              Unlink Todo
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -605,132 +722,6 @@ const HomeView = ({
         )}
       </SectionCard>
 
-      {activeTodoMenu && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={closeTodoMenu} />
-          <div
-            className="fixed z-50 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[150px]"
-            style={activeTodoMenu.style}
-          >
-            <button
-              onClick={() => {
-                setEditingTodo(activeTodoMenu.todo);
-                setShowEditModal(true);
-                closeTodoMenu();
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
-            >
-              <Edit2 size={12} />
-              Edit
-            </button>
-            {(() => {
-              const linkedEventId =
-                activeTodoMenu.todo.calendarEventId ??
-                (activeTodoMenu.todo.calendarEventIds && activeTodoMenu.todo.calendarEventIds[0]);
-              const hasLinkedEvent = Boolean(linkedEventId);
-              if (hasLinkedEvent) {
-                return (
-                  <>
-                    <button
-                      onClick={() => {
-                        handleViewCalendarEvent(activeTodoMenu.todo);
-                        closeTodoMenu();
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
-                    >
-                      <Calendar size={12} />
-                      View Calendar Event
-                    </button>
-                    <button
-                      onClick={() => {
-                        handleRemoveTodoFromCalendar(activeTodoMenu.todo);
-                        closeTodoMenu();
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
-                    >
-                      <Unlink size={12} />
-                      Remove from Calendar
-                    </button>
-                  </>
-                );
-              }
-              return (
-                <button
-                  onClick={() => {
-                    setCalendarTodo(activeTodoMenu.todo);
-                    setShowAddToCalendarModal(true);
-                    closeTodoMenu();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700 whitespace-nowrap"
-                >
-                  <CalendarPlus size={12} />
-                  Add to Calendar
-                </button>
-              );
-            })()}
-            <button
-              onClick={() => {
-                handleDeleteTodo(activeTodoMenu.todo);
-                closeTodoMenu();
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
-            >
-              <Trash2 size={12} />
-              Delete
-            </button>
-          </div>
-        </>
-      )}
-
-      {activeEventMenu && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={closeEventMenu} />
-          <div
-            className="fixed z-50 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[180px]"
-            style={activeEventMenu.style}
-          >
-            <button
-              onClick={() => handleViewEvent(activeEventMenu.event)}
-              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
-            >
-              <Calendar size={12} />
-              View Event
-            </button>
-            <button
-              onClick={() => handleEditEvent(activeEventMenu.event)}
-              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
-            >
-              <Edit2 size={12} />
-              Edit Event
-            </button>
-            <button
-              onClick={() => handleDeleteEvent(activeEventMenu.event)}
-              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
-            >
-              <Trash2 size={12} />
-              Delete Event
-            </button>
-            {getLinkedTodoIdFromEvent(activeEventMenu.event) && (
-              <>
-                <button
-                  onClick={() => handleViewLinkedTodo(activeEventMenu.event)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
-                >
-                  <CheckSquare size={12} />
-                  View Linked Todo
-                </button>
-                <button
-                  onClick={() => handleUnlinkEventFromTodo(activeEventMenu.event)}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-left text-xs text-slate-700"
-                >
-                  <Unlink size={12} />
-                  Unlink Todo
-                </button>
-              </>
-            )}
-          </div>
-        </>
-      )}
       <AddTodoToCalendarModal
         showModal={showAddToCalendarModal}
         setShowModal={setShowAddToCalendarModal}

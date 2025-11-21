@@ -58,14 +58,14 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
 
   const handleSave = () => {
     if (!formData.name.trim()) {
-      alert('Context name is required');
+      alert('Field name is required');
       return;
     }
     onSave({ ...context, ...formData });
   };
 
   const handleDelete = () => {
-    if (window.confirm(`Are you sure you want to delete "${context.name}"? All data in this context will be permanently deleted.`)) {
+    if (window.confirm(`Are you sure you want to delete "${context.name}"? All data in this field will be permanently deleted.`)) {
       onDelete(context.id);
     }
   };
@@ -80,7 +80,7 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
         <div className="flex justify-between items-center mb-5">
-          <h3 className="text-xl font-semibold text-slate-800">Context Settings</h3>
+          <h3 className="text-xl font-semibold text-slate-800">Field Settings</h3>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -98,7 +98,7 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
-              placeholder="Enter context name"
+              placeholder="Enter field name"
             />
           </div>
 
@@ -223,7 +223,7 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
               onClick={handleDelete}
               className="w-full bg-red-50 hover:bg-red-100 text-red-600 py-2.5 rounded-lg font-medium transition-all text-sm border border-red-200"
             >
-              Delete Context
+              Delete Field
             </button>
           )}
         </div>

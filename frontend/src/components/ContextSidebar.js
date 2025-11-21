@@ -97,7 +97,7 @@ const ContextSidebar = ({
       <div className="p-5 border-b border-slate-200/50 flex justify-between items-center">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-slate-800 whitespace-nowrap">Second Brain</h1>
-          <p className="text-xs text-slate-500 mt-0.5 whitespace-nowrap">Context Management</p>
+          <p className="text-xs text-slate-500 mt-0.5 whitespace-nowrap">Field Management</p>
         </div>
         <button
           onClick={() => setSidebarOpen(false)}
@@ -136,7 +136,7 @@ const ContextSidebar = ({
 
         {/* Divider */}
         <div className="py-2">
-          <p className="text-xs font-semibold text-slate-400 px-3">CONTEXTS</p>
+          <p className="text-xs font-semibold text-slate-400 px-3">FIELDS</p>
         </div>
 
         {/* Contexts */}
@@ -206,7 +206,7 @@ const ContextSidebar = ({
           className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-sm text-indigo-600 hover:bg-indigo-50 border-2 border-dashed border-indigo-200 hover:border-indigo-300 mt-2"
         >
           <Plus size={16} />
-          <span className="font-medium whitespace-nowrap">Add New Context</span>
+          <span className="font-medium whitespace-nowrap">Add New Field</span>
         </button>
       </nav>
     </>

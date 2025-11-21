@@ -60,6 +60,34 @@ def filter_transactions_by_range(transactions, date_range):
     return filtered
 
 
+def parse_date_param(value, is_end=False):
+    """
+    Normalize incoming date query params so dates without an explicit time component
+    cover the full day (e.g. 2024-01-01 should include all events on Jan 1st).
+    """
+    if not value:
+        return None
+
+    raw_value = value.strip()
+    cleaned_value = raw_value.replace('Z', '+00:00')
+    has_time_component = 'T' in raw_value or ' ' in raw_value
+
+    try:
+        parsed = datetime.fromisoformat(cleaned_value)
+    except ValueError:
+        # Fall back to date-only format
+        if len(raw_value) >= 10:
+            parsed = datetime.strptime(raw_value[:10], '%Y-%m-%d')
+            has_time_component = False
+        else:
+            raise
+
+    if not has_time_component and is_end:
+        parsed = parsed + timedelta(days=1) - timedelta(microseconds=1)
+
+    return parsed
+
+
 # ============================================================================
 # HEALTH CHECK
 # ============================================================================
@@ -438,10 +466,13 @@ def get_context_events(context_id):
         query = Event.query.filter_by(context_id=context_id)
         
         # Filter by date range if provided
-        if from_date:
-            query = query.filter(Event.start_date >= datetime.fromisoformat(from_date))
-        if to_date:
-            query = query.filter(Event.start_date <= datetime.fromisoformat(to_date))
+        start_dt = parse_date_param(from_date)
+        end_dt = parse_date_param(to_date, is_end=True)
+
+        if start_dt:
+            query = query.filter(Event.start_date >= start_dt)
+        if end_dt:
+            query = query.filter(Event.start_date <= end_dt)
         
         events = query.order_by(Event.start_date).all()
         
@@ -469,10 +500,14 @@ def get_all_events():
         
         if context_id:
             query = query.filter_by(context_id=int(context_id))
-        if from_date:
-            query = query.filter(Event.start_date >= datetime.fromisoformat(from_date))
-        if to_date:
-            query = query.filter(Event.start_date <= datetime.fromisoformat(to_date))
+
+        start_dt = parse_date_param(from_date)
+        end_dt = parse_date_param(to_date, is_end=True)
+
+        if start_dt:
+            query = query.filter(Event.start_date >= start_dt)
+        if end_dt:
+            query = query.filter(Event.start_date <= end_dt)
         
         events = query.order_by(Event.start_date).all()
         
@@ -510,9 +545,20 @@ def create_event():
         
         # Parse dates
         start_date = datetime.fromisoformat(data.get('startDate').replace('Z', '+00:00'))
+        duration_hours = data.get('durationHours')
+        if duration_hours is None:
+            duration_hours = data.get('duration')
+        duration_hours = float(duration_hours) if duration_hours is not None else None
+
         end_date = None
-        if data.get('endDate'):
+        if data.get('allDay', False):
+            end_date = start_date.replace(hour=23, minute=59, second=59, microsecond=0)
+        elif duration_hours:
+            end_date = start_date + timedelta(hours=duration_hours)
+        elif data.get('endDate'):
             end_date = datetime.fromisoformat(data.get('endDate').replace('Z', '+00:00'))
+        else:
+            end_date = start_date + timedelta(hours=1)
         
         recurrence_end_date = None
         if data.get('recurrenceEndDate'):
@@ -562,6 +608,12 @@ def update_event(event_id):
         data = request.get_json()
         
         # Update fields
+        duration_hours_param = None
+        if 'durationHours' in data:
+            duration_hours_param = float(data['durationHours']) if data['durationHours'] is not None else None
+        elif 'duration' in data:
+            duration_hours_param = float(data['duration']) if data['duration'] is not None else None
+
         if 'title' in data:
             event.title = data['title']
         if 'description' in data:
@@ -588,6 +640,15 @@ def update_event(event_id):
                 event.recurrence_end_date = datetime.strptime(data['recurrenceEndDate'], '%Y-%m-%d').date()
             else:
                 event.recurrence_end_date = None
+
+        # Normalize end date based on duration/all-day settings
+        if event.all_day:
+            event.end_date = event.start_date.replace(hour=23, minute=59, second=59, microsecond=0)
+        elif duration_hours_param is not None:
+            event.end_date = event.start_date + timedelta(hours=duration_hours_param)
+        elif event.end_date is None:
+            # Default to 1 hour block when no explicit duration/end is provided
+            event.end_date = event.start_date + timedelta(hours=1)
         
         # Keep linked todos in sync with event updates
         if event.linked_todos:
@@ -904,14 +965,18 @@ def unlink_todo_from_event(todo_id, event_id):
                 'message': 'Todo or Event not found'
             }), 404
 
+        removed = False
         if event in todo.calendar_events:
             todo.calendar_events.remove(event)
+            removed = True
 
+        # Delete the event to fully remove it from the calendar when detached
+        db.session.delete(event)
         db.session.commit()
 
         return jsonify({
             'success': True,
-            'message': 'Todo unlinked from event'
+            'message': 'Todo unlinked from event' if removed else 'Event deleted'
         }), 200
     except Exception as e:
         db.session.rollback()

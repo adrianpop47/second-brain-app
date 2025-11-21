@@ -1,4 +1,4 @@
-import { X, Calendar as CalendarIcon, Clock, Tag as TagIcon, MoreVertical, Repeat as RepeatIcon, Edit3, Trash2, Unlink, Link as LinkIcon } from 'lucide-react';
+import { X, Calendar as CalendarIcon, Clock, Tag as TagIcon, MoreVertical, Repeat as RepeatIcon, Edit3, Trash2, Unlink, Link as LinkIcon, Timer } from 'lucide-react';
 import { useState } from 'react';
 
 const formatDate = (isoString) => {
@@ -22,6 +22,33 @@ const formatTime = (isoString, allDay) => {
   });
 };
 
+const formatDuration = (event) => {
+  if (!event) return '';
+  if (event.allDay) return 'All day';
+
+  let durationHours = typeof event.durationHours === 'number' ? event.durationHours : null;
+
+  if (durationHours === null && event.startDate && event.endDate) {
+    const start = new Date(event.startDate);
+    const end = new Date(event.endDate);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    }
+  }
+
+  if (!durationHours || durationHours <= 0) return '';
+
+  const totalMinutes = Math.round(durationHours * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+
+  return parts.length > 0 ? parts.join(' ') : 'Less than 1m';
+};
+
 const EventQuickView = ({
   event,
   onClose,
@@ -33,6 +60,7 @@ const EventQuickView = ({
   const [menuOpen, setMenuOpen] = useState(false);
 
   if (!event) return null;
+  const durationText = formatDuration(event);
 
   const linkedTodoId = event.linkedTodoId ?? (event.linkedTodoIds && event.linkedTodoIds[0]);
 
@@ -40,9 +68,9 @@ const EventQuickView = ({
     <div className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-start justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md relative mt-12">
         <div className="flex items-start justify-between p-4 border-b border-slate-100">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-800">{event.title}</h3>
-            <p className="text-xs text-slate-500 mt-1">{event.contextName || 'Event details'}</p>
+          <div className="min-w-0">
+            <h3 className="text-lg font-semibold text-slate-800 truncate">{event.title}</h3>
+            <p className="text-xs text-slate-500 mt-1 truncate">{event.contextName || 'Event details'}</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -118,6 +146,13 @@ const EventQuickView = ({
             <Clock size={16} className="text-slate-500" />
             <span>{formatTime(event.startDate, event.allDay)}</span>
           </div>
+
+          {durationText && (
+            <div className="flex items-center gap-3 text-sm text-slate-700">
+              <Timer size={16} className="text-slate-500" />
+              <span>{durationText}</span>
+            </div>
+          )}
 
           {event.recurring && (
             <div className="flex items-center gap-3 text-sm text-slate-700">
