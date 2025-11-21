@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, BarChart3, Lightbulb, Calendar } from 'lucide-react';
+import { Menu, BarChart3, Lightbulb } from 'lucide-react';
 import ContextSidebar from './components/ContextSidebar';
 import ContextSettingsModal from './components/ContextSettingsModal';
 import ContextOverview from './components/ContextOverview';
@@ -325,7 +325,7 @@ const SecondBrainApp = () => {
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🤔</div>
         <h2 className="text-2xl font-semibold text-slate-800 mb-2">Nothing Selected</h2>
-        <p className="text-slate-600">Select a context or view from the sidebar</p>
+        <p className="text-slate-600">Select a field or view from the sidebar</p>
       </div>
     );
   };

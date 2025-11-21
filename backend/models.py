@@ -146,6 +146,17 @@ class Event(db.Model):
     linked_todos = db.relationship('Todo', secondary='todo_event_links', back_populates='calendar_events')
     
     def to_dict(self):
+        duration_hours = None
+        if self.all_day:
+            duration_hours = 24
+        elif self.end_date:
+            duration_hours = max(
+                0.5,
+                round(((self.end_date - self.start_date).total_seconds() / 3600) * 2) / 2
+            )
+        else:
+            duration_hours = 1
+
         return {
             'id': self.id,
             'contextId': self.context_id,
@@ -161,5 +172,6 @@ class Event(db.Model):
             'recurrenceEndDate': self.recurrence_end_date.strftime('%Y-%m-%d') if self.recurrence_end_date else None,
             'createdAt': self.created_at.strftime('%Y-%m-%d'),
             'linkedTodoIds': [todo.id for todo in self.linked_todos],
-            'linkedTodoId': self.linked_todos[0].id if self.linked_todos else None
+            'linkedTodoId': self.linked_todos[0].id if self.linked_todos else None,
+            'durationHours': duration_hours
         }
