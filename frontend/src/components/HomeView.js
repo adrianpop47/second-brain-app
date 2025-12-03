@@ -8,6 +8,8 @@ import EventModal from './EventModal';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 import { deleteTodoWithConfirmation, deleteEventWithConfirmation } from '../utils/deleteUtils';
+import { showAppAlert } from '../utils/alertService';
+import { confirmAction } from '../utils/confirmService';
 
 const SectionCard = ({
   title,
@@ -16,7 +18,7 @@ const SectionCard = ({
   children,
   className = ''
 }) => (
-  <div className={`bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50 ${className}`}>
+  <div className={`bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 ${className}`}>
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
         {LeadingIcon && <LeadingIcon size={20} className="text-slate-700" />}
@@ -28,12 +30,39 @@ const SectionCard = ({
   </div>
 );
 
+const getNotePreview = (text, limit = 120) => {
+  const normalized = (text || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit).trim()}…`;
+};
+
+const getNoteDateLabel = (value) => {
+  if (!value) return '';
+  const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const getNoteSortValue = (note = {}) => {
+  const source = note.updatedAt || note.modifiedAt || note.createdAt;
+  if (!source) return 0;
+  const normalized = source.includes('T') ? source : `${source}T00:00:00`;
+  const date = new Date(normalized);
+  return date.getTime() || 0;
+};
+
 const HomeView = ({ 
   summaryStats, 
   contextData,
   loading,
   onRequestViewCalendarEvent = () => {},
-  onRequestViewLinkedTodo = () => {}
+  onRequestViewLinkedTodo = () => {},
+  onOpenNote = () => {}
 }) => {
   const [allTodos, setAllTodos] = useState([]);
   const [todosLoading, setTodosLoading] = useState(true);
@@ -49,6 +78,10 @@ const HomeView = ({
   const [eventsLoading, setEventsLoading] = useState(true);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [recentNotes, setRecentNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(true);
+  const [openNoteMenuId, setOpenNoteMenuId] = useState(null);
+  const noteMenuContainerRef = useRef(null);
   const todoMenuRef = useRef(null);
   const eventMenuRef = useRef(null);
 
@@ -59,6 +92,24 @@ const HomeView = ({
   useEffect(() => {
     fetchUpcomingEvents();
   }, []);
+
+  useEffect(() => {
+    fetchRecentNotes();
+  }, []);
+
+  useEffect(() => {
+    if (!openNoteMenuId) {
+      noteMenuContainerRef.current = null;
+      return undefined;
+    }
+    const handleClickOutside = (event) => {
+      if (noteMenuContainerRef.current?.contains(event.target)) return;
+      setOpenNoteMenuId(null);
+      noteMenuContainerRef.current = null;
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openNoteMenuId]);
 
   useEffect(() => {
     if (!activeTodoMenu && !activeEventMenu) return undefined;
@@ -73,6 +124,27 @@ const HomeView = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [activeTodoMenu, activeEventMenu]);
+
+  const handleDeleteRecentNote = async (note) => {
+    const confirmed = await confirmAction({
+      title: `Delete note${note.title ? ` “${note.title}”` : ''}?`,
+      message: 'This note will be permanently removed.',
+      confirmLabel: 'Delete note',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      await apiService.deleteNote(note.id);
+      setRecentNotes((prev) => prev.filter((item) => item.id !== note.id));
+      showAppAlert('Note deleted', { type: 'info' });
+    } catch (err) {
+      console.error('Failed to delete note:', err);
+      showAppAlert('Failed to delete note');
+    } finally {
+      setOpenNoteMenuId(null);
+      /* no-op */
+    }
+  };
 
   const fetchUpcomingEvents = async () => {
     try {
@@ -91,6 +163,38 @@ const HomeView = ({
       console.error('Error fetching upcoming events:', err);
     } finally {
       setEventsLoading(false);
+    }
+  };
+
+  const fetchRecentNotes = async () => {
+    try {
+      setNotesLoading(true);
+      const contextsRes = await apiService.getContexts();
+      const contextsList = contextsRes.data || [];
+      const notesByContext = await Promise.all(
+        contextsList.map(async (context) => {
+          try {
+            const response = await apiService.getContextNotes(context.id);
+            const contextNotes = response.data || [];
+            return contextNotes.map((note) => ({
+              ...note,
+              contextId: context.id,
+              contextName: context.name,
+              contextEmoji: context.emoji
+            }));
+          } catch (err) {
+            console.error(`Error fetching notes for context ${context.id}:`, err);
+            return [];
+          }
+        })
+      );
+      const combined = notesByContext.flat().sort((a, b) => getNoteSortValue(b) - getNoteSortValue(a));
+      setRecentNotes(combined.slice(0, 5));
+    } catch (err) {
+      console.error('Error fetching recent notes:', err);
+      setRecentNotes([]);
+    } finally {
+      setNotesLoading(false);
     }
   };
 
@@ -141,7 +245,7 @@ const HomeView = ({
       fetchAllTodos();
     } catch (err) {
       console.error('Error updating todo:', err);
-      alert('Failed to update todo');
+      showAppAlert('Failed to update todo');
     }
   };
 
@@ -153,7 +257,7 @@ const HomeView = ({
       }
     } catch (err) {
       console.error('Error deleting todo:', err);
-      alert('Failed to delete todo');
+      showAppAlert('Failed to delete todo');
     }
   };
 
@@ -165,7 +269,7 @@ const HomeView = ({
       setEditingTodo(null);
     } catch (err) {
       console.error('Error updating todo:', err);
-      alert('Failed to update todo');
+      showAppAlert('Failed to update todo');
     }
   };
 
@@ -193,14 +297,20 @@ const HomeView = ({
   const handleRemoveTodoFromCalendar = async (todo) => {
     const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
     if (!linkedEventId) return;
-    if (!window.confirm('Remove this todo from the calendar?')) return;
+    const confirmed = await confirmAction({
+      title: 'Remove from calendar?',
+      message: 'This will unlink the calendar event from the todo.',
+      confirmLabel: 'Remove',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await apiService.unlinkTodoFromEvent(todo.id, linkedEventId);
       await fetchAllTodos();
       await fetchUpcomingEvents();
     } catch (err) {
       console.error('Error removing todo from calendar:', err);
-      alert('Failed to remove from calendar');
+      showAppAlert('Failed to remove from calendar');
     }
   };
 
@@ -237,7 +347,7 @@ const HomeView = ({
       setActiveEventMenu(null);
     } catch (err) {
       console.error('Error saving event:', err);
-      alert('Failed to save event');
+      showAppAlert('Failed to save event');
     }
   };
 
@@ -250,7 +360,7 @@ const HomeView = ({
       }
     } catch (err) {
       console.error('Error deleting event:', err);
-      alert('Failed to delete event');
+      showAppAlert('Failed to delete event');
     } finally {
       setActiveEventMenu(null);
     }
@@ -259,14 +369,20 @@ const HomeView = ({
   const handleUnlinkEventFromTodo = async (eventItem) => {
     const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
     if (!linkedTodoId) return;
-    if (!window.confirm('Unlink the todo from this event?')) return;
+    const confirmed = await confirmAction({
+      title: 'Unlink todo?',
+      message: 'This will unlink the todo from this event.',
+      confirmLabel: 'Unlink',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await apiService.unlinkTodoFromEvent(linkedTodoId, eventItem.id);
       await fetchUpcomingEvents();
       await fetchAllTodos();
     } catch (err) {
       console.error('Error unlinking todo:', err);
-      alert('Failed to unlink todo from event');
+      showAppAlert('Failed to unlink todo from event');
     } finally {
       setActiveEventMenu(null);
     }
@@ -303,12 +419,61 @@ const HomeView = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 px-3 sm:px-4 md:px-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-800">Home</h2>
-          <p className="text-sm text-slate-500">All fields overview</p>
+      <div className="my-4 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-slate-900">Home</h1>
+            <p className="text-sm text-slate-500 mt-1">
+              See activity across all your fields in one place without switching views.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 h-px bg-slate-100" />
+      </div>
+
+      {/* Getting Started */}
+      <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-xl p-6 border border-slate-200/50">
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">Getting Started</h3>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 p-3 bg-indigo-50/50 rounded-lg">
+            <div className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
+              1
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-800">Create Fields</p>
+              <p className="text-xs text-slate-600 mt-0.5">Organize your life into different areas (Work, Health, Personal, etc.)</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 p-3 bg-emerald-50/50 rounded-lg">
+            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
+              2
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-800">Track Your Finances</p>
+              <p className="text-xs text-slate-600 mt-0.5">Add income and expenses to each field with custom tags</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 p-3 bg-purple-50/50 rounded-lg">
+            <div className="w-6 h-6 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
+              3
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-800">Manage Your Tasks</p>
+              <p className="text-xs text-slate-600 mt-0.5">Use the Kanban board to organize todos with priorities and due dates</p>
+            </div>
+          </div>
+
+          <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
+            <div className="flex items-center gap-2 mb-1">
+              <Lightbulb size={16} className="text-blue-600" />
+              <p className="text-sm font-semibold text-slate-800">Pro Tip</p>
+            </div>
+            <p className="text-xs text-slate-600">Click on a field in the sidebar to see detailed stats, finances, and todos. Notes and Calendar are coming soon!</p>
+          </div>
         </div>
       </div>
 
@@ -551,49 +716,92 @@ const HomeView = ({
         </SectionCard>
       </div>
 
-      {/* Getting Started - Now below the main content */}
-      <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-xl p-6 border border-slate-200/50">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Getting Started</h3>
-        <div className="space-y-3">
-          <div className="flex items-start gap-3 p-3 bg-indigo-50/50 rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
-              1
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-800">Create Fields</p>
-              <p className="text-xs text-slate-600 mt-0.5">Organize your life into different areas (Work, Health, Personal, etc.)</p>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <SectionCard
+        title="Recent Notes"
+        leadingIcon={Lightbulb}
+      >
+        {notesLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" />
           </div>
-
-          <div className="flex items-start gap-3 p-3 bg-emerald-50/50 rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
-              2
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-800">Track Your Finances</p>
-              <p className="text-xs text-slate-600 mt-0.5">Add income and expenses to each field with custom tags</p>
-            </div>
+        ) : recentNotes.length > 0 ? (
+          <div className="space-y-2">
+            {recentNotes.map((note) => {
+              const dateLabel = getNoteDateLabel(
+                note.updatedAt || note.modifiedAt || note.createdAt
+              );
+              const preview = getNotePreview(note.body || note.description);
+              const tags = Array.isArray(note.tags) ? note.tags : [];
+              return (
+                <div
+                  key={note.id}
+                  ref={openNoteMenuId === note.id ? noteMenuContainerRef : undefined}
+                  className="group relative p-3 rounded-xl bg-slate-50/60 hover:bg-slate-100/60 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setOpenNoteMenuId(null);
+                    onOpenNote(note.contextId);
+                  }}
+                >
+                  <div className="flex items-center justify-between text-[11px] uppercase tracking-wide text-slate-400">
+                    <span>{dateLabel}</span>
+                    <button
+                      type="button"
+                      className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenNoteMenuId((prev) => (prev === note.id ? null : note.id));
+                      }}
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                  </div>
+                  <p className="font-semibold text-slate-800 text-sm mt-1 truncate">
+                    {note.title || 'Untitled note'}
+                  </p>
+                  {preview && (
+                    <p className="text-xs text-slate-500 truncate">{preview}</p>
+                  )}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="text-[11px] font-medium text-slate-600 bg-white/70 rounded-full px-2 py-0.5"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {openNoteMenuId === note.id && (
+                    <div
+                      className="absolute top-8 right-2 bg-white rounded-lg border border-slate-200 shadow-lg py-1 min-w-[130px] z-10"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRecentNote(note);
+                        }}
+                      >
+                        <Trash2 size={12} />
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-
-          <div className="flex items-start gap-3 p-3 bg-purple-50/50 rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
-              3
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-800">Manage Your Tasks</p>
-              <p className="text-xs text-slate-600 mt-0.5">Use the Kanban board to organize todos with priorities and due dates</p>
-            </div>
+        ) : (
+          <div className="py-6 text-center text-sm text-slate-500">
+            No notes yet. Start capturing ideas in your fields.
           </div>
-
-          <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
-            <div className="flex items-center gap-2 mb-1">
-              <Lightbulb size={16} className="text-blue-600" />
-              <p className="text-sm font-semibold text-slate-800">Pro Tip</p>
-            </div>
-            <p className="text-xs text-slate-600">Click on a field in the sidebar to see detailed stats, finances, and todos. Ideas and Calendar are coming soon!</p>
-          </div>
-        </div>
-      </div>
+        )}
+      </SectionCard>
 
       {/* Upcoming Events */}
       <SectionCard
@@ -721,6 +929,7 @@ const HomeView = ({
           </div>
         )}
       </SectionCard>
+      </div>
 
       <AddTodoToCalendarModal
         showModal={showAddToCalendarModal}

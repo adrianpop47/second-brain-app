@@ -8,6 +8,8 @@ import EventModal from './EventModal';
 import EventQuickView from './EventQuickView';
 import apiService from '../services/apiService';
 import { deleteEventWithConfirmation } from '../utils/deleteUtils';
+import { showAppAlert } from '../utils/alertService';
+import { confirmAction } from '../utils/confirmService';
 
 const VIEW_OPTIONS = [
   { value: 'day', label: 'Day', Icon: CalendarDays },
@@ -296,7 +298,7 @@ const ContextCalendar = ({
       setSelectedEvent(null);
     } catch (err) {
       console.error('Error saving event:', err);
-      alert('Failed to save event');
+      showAppAlert('Failed to save event');
     }
   };
 
@@ -306,7 +308,7 @@ const ContextCalendar = ({
       const eventToDelete = events.find(e => e.id === eventId);
       
       if (!eventToDelete) {
-        alert('Event not found');
+        showAppAlert('Event not found');
         return;
       }
 
@@ -325,20 +327,26 @@ const ContextCalendar = ({
       }
     } catch (err) {
       console.error('Error deleting event:', err);
-      alert('Failed to delete event: ' + (err.message || 'Unknown error'));
+      showAppAlert('Failed to delete event: ' + (err.message || 'Unknown error'));
     }
   };
 
   const handleUnlinkEvent = async (event) => {
     if (!event.linkedTodoId) return;
-    if (!window.confirm('Remove the linked todo from this event?')) return;
+    const confirmed = await confirmAction({
+      title: 'Unlink todo?',
+      message: 'This will unlink the todo from the event.',
+      confirmLabel: 'Unlink',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await apiService.unlinkTodoFromEvent(event.linkedTodoId, event.id);
       await fetchEvents();
       setQuickViewEventId(event.id);
     } catch (err) {
       console.error('Error unlinking todo from event:', err);
-      alert('Failed to unlink todo from event');
+      showAppAlert('Failed to unlink todo from event');
     }
   };
 
@@ -364,24 +372,31 @@ const ContextCalendar = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 px-3 sm:px-4 md:px-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-800">{context.name} › Calendar</h2>
-          <p className="text-sm text-slate-500">Schedule and manage your events</p>
+      <div className="my-4 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-slate-900">Calendar</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Visualize this field’s events, deadlines, and linked todos to stay ahead.
+          </p>
         </div>
-        <button
-          onClick={handleAddEvent}
-          className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium transition-all shadow-sm hover:shadow"
-        >
-          <Plus size={18} />
-          Add Event
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleAddEvent}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors bg-indigo-500 hover:bg-indigo-600"
+          >
+            <Plus size={16} />
+            Add Event
+          </button>
+        </div>
+      </div>
+        <div className="mt-4 h-px bg-slate-100" />
       </div>
 
       {/* Calendar View Content */}
-      <div className="bg-white/70 backdrop-blur-sm rounded-xl shadow-sm border border-slate-200/50">
+      <div className="bg-white rounded-2xl border border-slate-200">
         <div className="px-4 pt-4 pb-3 border-b border-slate-100 flex flex-col gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">

@@ -1,11 +1,11 @@
 const StatCard = ({ icon: Icon, label, value, variant = 'default', onClick, comingSoon = false }) => {
   const variants = {
-    default: 'bg-white/70 backdrop-blur-sm border border-slate-200/50',
-    income: 'bg-white/70 backdrop-blur-sm border border-slate-200/50',
-    expense: 'bg-white/70 backdrop-blur-sm border border-slate-200/50',
-    balance: 'bg-white/70 backdrop-blur-sm border border-slate-200/50',
-    todos: 'bg-white/70 backdrop-blur-sm border border-slate-200/50',
-    action: 'bg-indigo-500 hover:bg-indigo-600 cursor-pointer'
+    default: 'bg-white border border-slate-200',
+    income: 'bg-white border border-slate-200',
+    expense: 'bg-white border border-slate-200',
+    balance: 'bg-white border border-slate-200',
+    todos: 'bg-white border border-slate-200',
+    action: 'bg-indigo-500 hover:bg-indigo-600 cursor-pointer text-white'
   };
 
   const iconBgColors = {
@@ -41,8 +41,8 @@ const StatCard = ({ icon: Icon, label, value, variant = 'default', onClick, comi
   return (
     <Component
       onClick={onClick}
-      className={`${variants[variant]} rounded-xl p-3 sm:p-4 shadow-sm ${
-        onClick ? 'transition-all hover:shadow text-left' : ''
+      className={`${variants[variant]} rounded-2xl p-3 sm:p-4 ${
+        onClick ? 'transition-all text-left' : ''
       }`}
     >
       <div className="flex items-center gap-2 mb-2">

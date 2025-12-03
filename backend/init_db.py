@@ -31,6 +31,7 @@ def seed_data():
             name='Business',
             emoji='Briefcase',
             color='#000000',
+            field_type='Revenue',
             created_at=datetime(2025, 10, 1)
         )
         
@@ -38,6 +39,7 @@ def seed_data():
             name='Fitness',
             emoji='Dumbbell',
             color='#000000',
+            field_type='Investment',
             created_at=datetime(2025, 10, 1)
         )
         
@@ -45,6 +47,7 @@ def seed_data():
             name='Health',
             emoji='Heart',
             color='#000000',
+            field_type='Experimental',
             created_at=datetime(2025, 10, 1)
         )
         

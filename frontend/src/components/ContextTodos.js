@@ -7,6 +7,8 @@ import AddTodoToCalendarModal from './AddTodoToCalendarModal';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 import { deleteTodoWithConfirmation } from '../utils/deleteUtils';
+import { showAppAlert } from '../utils/alertService';
+import { confirmAction } from '../utils/confirmService';
 
 const STATUSES = {
   TODO: 'todo',
@@ -84,19 +86,25 @@ const ContextTodos = ({
   const handleRemoveFromCalendar = async (todo) => {
     const linkedId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
     if (!linkedId) return;
-    if (!window.confirm('Remove this todo from the calendar?')) return;
+    const confirmed = await confirmAction({
+      title: 'Remove from calendar?',
+      message: 'This will unlink the calendar event from the todo.',
+      confirmLabel: 'Remove',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await apiService.unlinkTodoFromEvent(todo.id, linkedId);
       await fetchTodos();
     } catch (err) {
       console.error('Error unlinking todo from event:', err);
-      alert('Failed to remove from calendar');
+      showAppAlert('Failed to remove from calendar');
     }
   };
 
   const addTodo = async (todoData) => {
     if (!todoData.title.trim()) {
-      alert('Todo title is required');
+      showAppAlert('Todo title is required');
       return;
     }
 
@@ -111,7 +119,7 @@ const ContextTodos = ({
       setShowAddModal(false);
     } catch (err) {
       console.error('Error adding todo:', err);
-      alert('Failed to add todo');
+      showAppAlert('Failed to add todo');
     }
   };
 
@@ -121,7 +129,7 @@ const ContextTodos = ({
       await fetchTodos();
     } catch (err) {
       console.error('Error updating todo status:', err);
-      alert('Failed to update todo');
+      showAppAlert('Failed to update todo');
     }
   };
 
@@ -133,7 +141,7 @@ const ContextTodos = ({
       }
     } catch (err) {
       console.error('Error deleting todo:', err);
-      alert('Failed to delete todo');
+      showAppAlert('Failed to delete todo');
     }
   };
 
@@ -143,7 +151,7 @@ const ContextTodos = ({
       await fetchTodos();
     } catch (err) {
       console.error('Error updating todo:', err);
-      alert('Failed to update todo');
+      showAppAlert('Failed to update todo');
     }
   };
 
@@ -220,45 +228,52 @@ const ContextTodos = ({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 px-3 sm:px-4 md:px-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-800">{context.name} › Todos</h2>
-          <p className="text-sm text-slate-500">Task management with Kanban board</p>
+      <div className="my-4 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-slate-900">Todos</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Organize this field’s work by status, priority, and overdue risk.
+          </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium transition-all shadow-sm hover:shadow"
-        >
-          <Plus size={18} />
-          Add Todo
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors bg-indigo-500 hover:bg-indigo-600"
+          >
+            <Plus size={16} />
+            Add Todo
+          </button>
+        </div>
+      </div>
+        <div className="mt-4 h-px bg-slate-100" />
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-3 border border-slate-200">
           <p className="text-xs font-medium text-slate-600 mb-1">Total</p>
           <p className="text-2xl font-semibold text-slate-800">{stats.total}</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-3 border border-slate-200">
           <p className="text-xs font-medium text-slate-600 mb-1">Overdue</p>
           <p className="text-2xl font-semibold text-red-600">{overdueTodos.length}</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-3 border border-slate-200">
           <p className="text-xs font-medium text-slate-600 mb-1">To Do</p>
           <p className="text-2xl font-semibold text-slate-600">{stats.pending}</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-3 border border-slate-200">
           <p className="text-xs font-medium text-slate-600 mb-1">In Progress</p>
           <p className="text-2xl font-semibold text-amber-600">{stats.inProgress}</p>
         </div>
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-3 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-3 border border-slate-200">
           <p className="text-xs font-medium text-slate-600 mb-1">Done</p>
           <p className="text-2xl font-semibold text-emerald-600">{stats.completed}</p>
         </div>
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-3 shadow-sm">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-3">
           <p className="text-xs font-medium text-blue-100 mb-1">Completion</p>
           <p className="text-2xl font-semibold text-white">{stats.completionRate}%</p>
         </div>
@@ -274,7 +289,7 @@ const ContextTodos = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search todos by title, description, or tags..."
-            className="w-full bg-white/70 backdrop-blur-sm border border-slate-200 rounded-lg pl-10 pr-10 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+            className="w-full bg-white border border-slate-200 rounded-lg pl-10 pr-10 py-2.5 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
           />
           {searchQuery && (
             <button

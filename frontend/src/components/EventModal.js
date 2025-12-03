@@ -3,6 +3,7 @@ import { X, Calendar as CalendarIcon, Clock, Tag as TagIcon, Repeat, ChevronRigh
 import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
 import DurationPicker from './DurationPicker';
+import { showAppAlert } from '../utils/alertService';
 
 const RECURRENCE_OPTIONS = [
   { value: 'daily', label: 'Daily' },
@@ -200,17 +201,17 @@ const EventModal = ({
     e.preventDefault();
     
     if (!formData.title.trim()) {
-      alert('Event title is required');
+      showAppAlert('Event title is required');
       return;
     }
 
     if (!formData.startDate) {
-      alert('Start date is required');
+      showAppAlert('Start date is required');
       return;
     }
 
     if (!formData.allDay && !formData.startTime) {
-      alert('Start time is required');
+      showAppAlert('Start time is required');
       return;
     }
 
@@ -271,7 +272,7 @@ const EventModal = ({
       setShowRecurrencePicker(false);
     } catch (err) {
       console.error('Error saving event:', err);
-      alert('Failed to save event');
+      showAppAlert('Failed to save event');
     } finally {
       setLoading(false);
     }

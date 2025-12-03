@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Flag, Tag as TagIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
+import { showAppAlert } from '../utils/alertService';
 
 const AddTodoModal = ({ 
   showModal, 
@@ -59,7 +60,7 @@ const AddTodoModal = ({
     e.preventDefault();
     
     if (!formData.title.trim()) {
-      alert('Todo title is required');
+      showAppAlert('Todo title is required');
       return;
     }
     

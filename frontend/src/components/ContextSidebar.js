@@ -55,7 +55,7 @@ const ContextSidebar = ({
     { id: 'overview', name: 'Overview', icon: BarChart3 },
     { id: 'finances', name: 'Finances', icon: Wallet },
     { id: 'todos', name: 'Todos', icon: CheckSquare },
-    { id: 'ideas', name: 'Ideas', icon: Lightbulb },
+    { id: 'notes', name: 'Notes', icon: Lightbulb },
     { id: 'calendar', name: 'Calendar', icon: Calendar },
     { id: 'settings', name: 'Settings', icon: Settings },
   ];
@@ -93,17 +93,17 @@ const ContextSidebar = ({
   };
 
   return (
-    <>
-      <div className="p-5 border-b border-slate-200/50 flex justify-between items-center">
+    <div className="relative h-full flex flex-col bg-slate-100">
+      <div className="sticky top-0 z-10 px-5 py-4 flex justify-between items-center bg-slate-100">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold text-slate-800 whitespace-nowrap">Second Brain</h1>
-          <p className="text-xs text-slate-500 mt-0.5 whitespace-nowrap">Field Management</p>
         </div>
         <button
           onClick={() => setSidebarOpen(false)}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors flex-shrink-0 ml-2"
+          className="md:hidden h-10 w-10 flex items-center justify-center flex-shrink-0 ml-2 text-slate-500 hover:text-slate-900 transition-colors"
+          aria-label="Close sidebar"
         >
-          <X size={20} className="text-slate-600" />
+          <X size={22} strokeWidth={2.25} />
         </button>
       </div>
       
@@ -111,27 +111,14 @@ const ContextSidebar = ({
         {/* Home */}
         <button
           onClick={() => handleNavigation({ type: 'home' })}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm ${
             activeView.type === 'home'
               ? 'bg-indigo-500/90 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100/80'
+              : 'text-slate-600 hover:bg-white/70'
           }`}
         >
           <Home size={18} />
           <span className="font-medium whitespace-nowrap">Home</span>
-        </button>
-
-        {/* Insights */}
-        <button
-          onClick={() => handleNavigation({ type: 'insights' })}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${
-            activeView.type === 'insights'
-              ? 'bg-indigo-500/90 text-white shadow-sm'
-              : 'text-slate-600 hover:bg-slate-100/80'
-          }`}
-        >
-          <BarChart3 size={18} />
-          <span className="font-medium whitespace-nowrap">Insights</span>
         </button>
 
         {/* Divider */}
@@ -151,23 +138,19 @@ const ContextSidebar = ({
             <div key={context.id} className="space-y-0.5">
               <button
                 onClick={() => handleContextClick(context.id)}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-all text-sm ${
+                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg transition-colors text-sm ${
                   isActive && !expandedContexts[context.id]
                     ? 'bg-indigo-500/90 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100/80'
+                    : 'text-slate-600 hover:bg-white/70'
                 }`}
               >
-                {isExpanded ? (
-                  <ChevronDown size={16} className="flex-shrink-0" />
-                ) : (
-                  <ChevronRight size={16} className="flex-shrink-0" />
-                )}
                 <IconComponent size={18} className="flex-shrink-0" />
                 <span className="font-medium whitespace-nowrap flex-1 text-left">{context.name}</span>
-                <div 
-                  className="w-2 h-2 rounded-full flex-shrink-0" 
-                  style={{ backgroundColor: context.color }}
-                ></div>
+                {isExpanded ? (
+                  <ChevronDown size={16} className="ml-auto flex-shrink-0" />
+                ) : (
+                  <ChevronRight size={16} className="ml-auto flex-shrink-0" />
+                )}
               </button>
 
               {/* Context Apps - All with Lucide icons */}
@@ -183,10 +166,10 @@ const ContextSidebar = ({
                           contextId: context.id, 
                           app: app.id 
                         })}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-xs ${
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-xs ${
                           isActive && activeView.app === app.id
                             ? 'bg-indigo-500/90 text-white shadow-sm'
-                            : 'text-slate-600 hover:bg-slate-100/80'
+                            : 'text-slate-600 hover:bg-white/70'
                         }`}
                       >
                         <AppIcon size={16} />
@@ -209,7 +192,7 @@ const ContextSidebar = ({
           <span className="font-medium whitespace-nowrap">Add New Field</span>
         </button>
       </nav>
-    </>
+    </div>
   );
 };
 

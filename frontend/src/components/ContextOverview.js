@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, MoreVertical, Edit2, Trash2, Unlink } from 'lucide-react';
 import AddTransactionModal from './AddTransactionModal';
 import AddTodoModal from './AddTodoModal';
@@ -8,9 +8,11 @@ import EventModal from './EventModal';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 import { deleteTodoWithConfirmation, deleteEventWithConfirmation } from '../utils/deleteUtils';
+import { showAppAlert } from '../utils/alertService';
+import { confirmAction } from '../utils/confirmService';
 
 const OverviewCard = ({ title, icon: Icon, rightSlot = null, children, className = '' }) => (
-  <div className={`bg-white/70 backdrop-blur-sm rounded-xl p-5 shadow-sm border border-slate-200/50 ${className}`}>
+  <div className={`bg-white rounded-2xl p-5 border border-slate-200 ${className}`}>
     <div className="flex items-center justify-between mb-4">
       <div className="flex items-center gap-2">
         {Icon && <Icon size={20} className="text-slate-700" />}
@@ -22,6 +24,40 @@ const OverviewCard = ({ title, icon: Icon, rightSlot = null, children, className
   </div>
 );
 
+const stripHtml = (text = '') => text.replace(/<[^>]+>/g, ' ');
+const getNotePreview = (text, limit = 130) => {
+  const normalized = stripHtml(text || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= limit) return normalized;
+  return `${normalized.slice(0, limit).trim()}...`;
+};
+
+const getNoteTimestamp = (createdAt) => {
+  if (!createdAt) return { date: '', time: '' };
+  const hasTime = createdAt.includes('T');
+  let date;
+  if (hasTime) {
+    date = new Date(createdAt);
+  } else {
+    const [year, month, day] = createdAt.split('-').map(Number);
+    date = new Date(year, month - 1, day);
+  }
+  const formattedDate = date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
+  });
+  const formattedTime = hasTime
+    ? date.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit'
+      })
+    : '';
+  return { date: formattedDate, time: formattedTime };
+};
+
+const FIELD_TYPE_BADGE_CLASS =
+  'inline-flex items-center border border-slate-300 bg-white text-slate-700 text-[11px] font-semibold capitalize tracking-[0.02em] px-2.5 py-0.5 rounded-full shadow-sm';
+
 const ContextOverview = ({
   context,
   stats,
@@ -29,7 +65,8 @@ const ContextOverview = ({
   loading,
   onDataUpdate,
   onRequestViewCalendarEvent = () => {},
-  onRequestViewLinkedTodo = () => {}
+  onRequestViewLinkedTodo = () => {},
+  onOpenNotes = () => {}
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAddTodoModal, setShowAddTodoModal] = useState(false);
@@ -53,6 +90,10 @@ const ContextOverview = ({
     date: new Date().toISOString().split('T')[0],
     contextId: context.id
   });
+  const [recentNotes, setRecentNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(true);
+  const [openNoteMenuId, setOpenNoteMenuId] = useState(null);
+  const noteMenuContainerRef = useRef(null);
 
   const fetchRecentTodos = async () => {
     try {
@@ -105,6 +146,56 @@ const ContextOverview = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.id]);
 
+  useEffect(() => {
+    const fetchNotes = async () => {
+      try {
+        setNotesLoading(true);
+        const response = await apiService.getContextNotes(context.id);
+        const notes = response.data || [];
+        setRecentNotes(notes.slice(0, 3));
+      } catch (err) {
+        setRecentNotes([]);
+      } finally {
+        setNotesLoading(false);
+      }
+    };
+    fetchNotes();
+  }, [context.id]);
+
+  useEffect(() => {
+    if (!openNoteMenuId) {
+      noteMenuContainerRef.current = null;
+      return undefined;
+    }
+    const handler = (event) => {
+      if (noteMenuContainerRef.current?.contains(event.target)) return;
+      setOpenNoteMenuId(null);
+      noteMenuContainerRef.current = null;
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openNoteMenuId]);
+
+  const handleDeleteNotePreview = async (note) => {
+    const confirmed = await confirmAction({
+      title: `Delete note${note.title ? ` “${note.title}”` : ''}?`,
+      message: 'This note will be permanently removed.',
+      confirmLabel: 'Delete note',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      await apiService.deleteNote(note.id);
+      setRecentNotes((prev) => prev.filter((item) => item.id !== note.id));
+      showAppAlert('Note deleted', { type: 'info' });
+    } catch (err) {
+      console.error('Failed to delete note:', err);
+      showAppAlert('Failed to delete note');
+    } finally {
+      setOpenNoteMenuId(null);
+    }
+  };
+
   const handleMarkTodoAsDone = async (todoId) => {
     try {
       await apiService.updateTodo(todoId, { status: 'done' });
@@ -115,7 +206,7 @@ const ContextOverview = ({
       }
     } catch (err) {
       console.error('Error updating todo:', err);
-      alert('Failed to update todo');
+      showAppAlert('Failed to update todo');
     }
   };
 
@@ -130,7 +221,7 @@ const ContextOverview = ({
       }
     } catch (err) {
       console.error('Error deleting todo:', err);
-      alert('Failed to delete todo');
+      showAppAlert('Failed to delete todo');
     }
   };
 
@@ -145,7 +236,7 @@ const ContextOverview = ({
       }
     } catch (err) {
       console.error('Error updating todo:', err);
-      alert('Failed to update todo');
+      showAppAlert('Failed to update todo');
     }
   };
 
@@ -162,7 +253,7 @@ const ContextOverview = ({
       }
     } catch (err) {
       console.error('Error adding todo:', err);
-      alert('Failed to add todo');
+      showAppAlert('Failed to add todo');
     }
   };
 
@@ -180,14 +271,20 @@ const ContextOverview = ({
   const handleRemoveTodoFromCalendar = async (todo) => {
     const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
     if (!linkedEventId) return;
-    if (!window.confirm('Remove this todo from the calendar?')) return;
+    const confirmed = await confirmAction({
+      title: 'Remove from calendar?',
+      message: 'This will unlink the calendar event from the todo.',
+      confirmLabel: 'Remove',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await apiService.unlinkTodoFromEvent(todo.id, linkedEventId);
       await fetchRecentTodos();
       await fetchUpcomingEvents();
     } catch (err) {
       console.error('Error unlinking todo:', err);
-      alert('Failed to remove from calendar');
+      showAppAlert('Failed to remove from calendar');
     }
   };
 
@@ -224,7 +321,7 @@ const ContextOverview = ({
       }
     } catch (err) {
       console.error('Error deleting event:', err);
-      alert('Failed to delete event');
+      showAppAlert('Failed to delete event');
     } finally {
       setOpenEventMenuId(null);
     }
@@ -233,14 +330,20 @@ const ContextOverview = ({
   const handleUnlinkEventTodo = async (eventItem) => {
     const linkedTodoId = getLinkedTodoIdFromEvent(eventItem);
     if (!linkedTodoId) return;
-    if (!window.confirm('Unlink the todo from this event?')) return;
+    const confirmed = await confirmAction({
+      title: 'Unlink todo?',
+      message: 'This will unlink the todo from the event.',
+      confirmLabel: 'Unlink',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await apiService.unlinkTodoFromEvent(linkedTodoId, eventItem.id);
       await fetchUpcomingEvents();
       await fetchRecentTodos();
     } catch (err) {
       console.error('Error unlinking todo from event:', err);
-      alert('Failed to unlink todo from event');
+      showAppAlert('Failed to unlink todo from event');
     } finally {
       setOpenEventMenuId(null);
     }
@@ -276,7 +379,7 @@ const ContextOverview = ({
       }
     } catch (err) {
       console.error('Error saving event:', err);
-      alert('Failed to save event');
+      showAppAlert('Failed to save event');
     }
   };
 
@@ -290,7 +393,7 @@ const ContextOverview = ({
 
   const addTransaction = async () => {
     if (!newTransaction.amount) {
-      alert('Amount is required');
+      showAppAlert('Amount is required');
       return;
     }
     
@@ -330,7 +433,7 @@ const ContextOverview = ({
       setShowAddModal(false);
     } catch (err) {
       console.error('Error adding transaction:', err);
-      alert('Failed to add transaction: ' + err.message);
+      showAppAlert('Failed to add transaction: ' + err.message);
     }
   };
 
@@ -360,19 +463,28 @@ const ContextOverview = ({
     });
   };
 
+  const fieldType = context.fieldType || 'Revenue';
+  const fieldBadgeClass = FIELD_TYPE_BADGE_CLASS;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 px-3 sm:px-4 md:px-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-800">{context.name}</h2>
-          <p className="text-sm text-slate-500">Field Overview</p>
+      <div className="my-4 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-2xl font-semibold text-slate-900">{context.name}</h1>
+            <span className={fieldBadgeClass}>{fieldType}</span>
+          </div>
         </div>
+        <p className="text-sm text-slate-500 mt-1">
+          Summarizes this field’s finances, todos, notes, and calendar so you know what’s happening now.
+        </p>
+        <div className="mt-4 h-px bg-slate-100" />
       </div>
 
       {/* Stats Cards - All white with consistent styling like Home */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-emerald-100/80 rounded-lg">
               <TrendingUp size={18} className="text-emerald-600" />
@@ -382,7 +494,7 @@ const ContextOverview = ({
           <p className="text-2xl font-semibold text-slate-800">${stats.total_income?.toFixed(2) || '0.00'}</p>
         </div>
 
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-rose-100/80 rounded-lg">
               <TrendingDown size={18} className="text-rose-600" />
@@ -392,7 +504,7 @@ const ContextOverview = ({
           <p className="text-2xl font-semibold text-slate-800">${stats.total_expenses?.toFixed(2) || '0.00'}</p>
         </div>
 
-        <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-slate-200/50">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-indigo-100/80 rounded-lg">
               <Wallet size={18} className="text-indigo-600" />
@@ -406,7 +518,19 @@ const ContextOverview = ({
       {/* Recent Activity Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Transactions */}
-        <OverviewCard title="Recent Transactions" icon={Wallet}>
+        <OverviewCard
+          title="Recent Transactions"
+          icon={Wallet}
+          rightSlot={
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-medium hover:bg-indigo-100 transition-colors"
+            >
+              Add Transaction
+            </button>
+          }
+        >
           {recentTransactions && recentTransactions.length > 0 ? (
             <div className="space-y-2">
               {recentTransactions.map(transaction => (
@@ -486,16 +610,22 @@ const ContextOverview = ({
                           onClick={async (e) => {
                             e.stopPropagation();
                             e.currentTarget.parentElement.classList.add('hidden');
-                            if (window.confirm('Are you sure you want to delete this transaction?')) {
-                              try {
-                                await apiService.deleteTransaction(transaction.id);
-                                if (onDataUpdate) {
-                                  onDataUpdate();
-                                }
-                              } catch (err) {
-                                console.error('Error deleting transaction:', err);
-                                alert('Failed to delete transaction');
+                            const confirmed = await confirmAction({
+                              title: 'Delete transaction?',
+                              message: 'This transaction will be permanently removed.',
+                              confirmLabel: 'Delete',
+                              tone: 'danger'
+                            });
+                            if (!confirmed) return;
+                            try {
+                              await apiService.deleteTransaction(transaction.id);
+                              if (onDataUpdate) {
+                                onDataUpdate();
                               }
+                              showAppAlert('Transaction deleted', { type: 'info' });
+                            } catch (err) {
+                              console.error('Error deleting transaction:', err);
+                              showAppAlert('Failed to delete transaction');
                             }
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-left text-xs text-red-600"
@@ -523,9 +653,13 @@ const ContextOverview = ({
           title="Active Todos"
           icon={CheckSquare}
           rightSlot={
-            <span className="text-sm font-normal text-slate-500">
-              {recentTodos.length} {recentTodos.length === 1 ? 'todo' : 'todos'}
-            </span>
+            <button
+              type="button"
+              onClick={() => setShowAddTodoModal(true)}
+              className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-medium hover:bg-indigo-100 transition-colors"
+            >
+              Add Todo
+            </button>
           }
         >
           {todosLoading ? (
@@ -718,17 +852,110 @@ const ContextOverview = ({
             </div>
           )}
         </OverviewCard>
-        {/* Recent Ideas */}
-        <OverviewCard title="Recent Ideas" icon={Lightbulb}>
-          <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
-            <Lightbulb size={48} className="text-slate-300" />
-            <p className="text-slate-500 text-sm">Ideas coming soon</p>
-            <p className="text-slate-400 text-xs">Brainstorming tools are on the way.</p>
-          </div>
+        {/* Recent Notes */}
+        <OverviewCard
+          title="Recent Notes"
+          icon={Lightbulb}
+          rightSlot={
+            <button
+              type="button"
+              onClick={onOpenNotes}
+              className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-medium hover:bg-indigo-100 transition-colors"
+            >
+              Add Note
+            </button>
+          }
+        >
+          {notesLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+            </div>
+          ) : recentNotes.length > 0 ? (
+            <div className="space-y-2">
+              {recentNotes.map((note) => {
+                const { date } = getNoteTimestamp(note.createdAt);
+                const tags = Array.isArray(note.tags) ? note.tags : [];
+                const isMenuOpen = openNoteMenuId === note.id;
+                return (
+                  <div
+                    key={note.id}
+                    ref={openNoteMenuId === note.id ? noteMenuContainerRef : undefined}
+                    className="group relative flex flex-col gap-2 p-3 bg-slate-50/50 rounded-lg hover:bg-slate-100/50 transition-colors cursor-pointer"
+                    onClick={() => {
+                      setOpenNoteMenuId(null);
+                      onOpenNotes();
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="absolute top-2 right-2 p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenNoteMenuId((prev) => (prev === note.id ? null : note.id));
+                      }}
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                    {isMenuOpen && (
+                      <div
+                        className="absolute top-8 right-2 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[130px] z-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteNotePreview(note);
+                          }}
+                        >
+                          <Trash2 size={12} />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                    <div className="text-[11px] uppercase tracking-wide text-slate-400">{date}</div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-800 text-sm truncate">{note.title || 'Untitled note'}</p>
+                      {getNotePreview(note.body) && (
+                        <p className="text-xs text-slate-500 truncate">{getNotePreview(note.body)}</p>
+                      )}
+                    </div>
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-[11px] font-medium text-slate-600 bg-white/70 rounded-full px-2 py-0.5"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-sm text-slate-500">No notes yet. Start capturing ideas.</div>
+          )}
         </OverviewCard>
 
         {/* Upcoming Events */}
-        <OverviewCard title="Upcoming Events" icon={Calendar}>
+        <OverviewCard
+          title="Upcoming Events"
+          icon={Calendar}
+          rightSlot={
+            <button
+              type="button"
+              onClick={handleAddEvent}
+              className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-medium hover:bg-indigo-100 transition-colors"
+            >
+              Add Event
+            </button>
+          }
+        >
           {eventsLoading ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
@@ -835,45 +1062,6 @@ const ContextOverview = ({
             </div>
           )}
         </OverviewCard>
-      </div>
-
-      {/* Quick Actions - Consistent button colors */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Add Transaction button - indigo */}
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow"
-        >
-          <Wallet size={20} className="mb-2" />
-          <p className="text-sm font-medium">Add Transaction</p>
-          <p className="text-xs text-white/80 mt-1">Track income or expenses</p>
-        </button>
-        
-        {/* Add Todo button - blue */}
-        <button 
-          onClick={() => setShowAddTodoModal(true)}
-          className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow"
-        >
-          <CheckSquare size={20} className="mb-2" />
-          <p className="text-sm font-medium">Add Todo</p>
-          <p className="text-xs text-white/80 mt-1">Capture a task quickly</p>
-        </button>
-        
-        {/* Disabled buttons - consistent gray style */}
-        <button className="bg-slate-100 hover:bg-slate-200 text-slate-400 rounded-lg p-4 text-left transition-all shadow-sm cursor-not-allowed" disabled>
-          <Lightbulb size={20} className="mb-2" />
-          <p className="text-sm font-medium">Add Idea</p>
-          <p className="text-xs mt-1">Soon</p>
-        </button>
-        
-        <button
-          onClick={handleAddEvent}
-          className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg p-4 text-left transition-all shadow-sm hover:shadow"
-        >
-          <Calendar size={20} className="mb-2" />
-          <p className="text-sm font-medium">Add Event</p>
-          <p className="text-xs mt-1 text-white/80">Schedule calendar events</p>
-        </button>
       </div>
 
       {/* Add Transaction Modal */}

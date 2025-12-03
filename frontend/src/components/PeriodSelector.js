@@ -9,7 +9,7 @@ const PERIOD_OPTIONS = [
   { value: 'all', label: 'All' }
 ];
 
-const PeriodSelector = ({ value, onChange }) => {
+const PeriodSelector = ({ value, onChange, compact = false }) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -26,11 +26,16 @@ const PeriodSelector = ({ value, onChange }) => {
   const selected = PERIOD_OPTIONS.find((option) => option.value === value) || PERIOD_OPTIONS[0];
 
   return (
-    <div className="relative w-full sm:w-56" ref={containerRef}>
+    <div
+      className={`relative inline-flex ${compact ? 'min-w-[120px]' : 'min-w-[160px]'}`}
+      ref={containerRef}
+    >
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-10 py-2.5 text-sm font-medium text-slate-700 text-left flex items-center justify-between gap-2 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+        className={`relative w-full bg-slate-50 border border-slate-200 rounded-lg ${
+          compact ? 'pl-3 pr-7 py-1.5 text-xs' : 'pl-3 pr-8 py-2.5 text-sm'
+        } font-medium text-slate-700 text-left flex items-center gap-2 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent`}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -38,7 +43,7 @@ const PeriodSelector = ({ value, onChange }) => {
           <CalendarRange size={16} className="text-slate-400" />
           {selected.label}
         </span>
-        <ChevronDown size={16} className="text-slate-400" />
+        <ChevronDown size={16} className="text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
       </button>
       {open && (
         <div className="absolute z-30 mt-2 w-full bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">

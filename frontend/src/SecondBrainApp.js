@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, BarChart3, Lightbulb } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import ContextSidebar from './components/ContextSidebar';
 import ContextSettingsModal from './components/ContextSettingsModal';
 import ContextOverview from './components/ContextOverview';
@@ -7,6 +7,10 @@ import HomeView from './components/HomeView';
 import ContextFinances from './components/ContextFinances';
 import ContextTodos from './components/ContextTodos';
 import ContextCalendar from './components/ContextCalendar';
+import ContextNotes from './components/ContextNotes';
+import AppAlert from './components/AppAlert';
+import ConfirmDialog from './components/ConfirmDialog';
+import { showAppAlert } from './utils/alertService';
 import apiService from './services/apiService';
 
 const SecondBrainApp = () => {
@@ -123,27 +127,22 @@ const SecondBrainApp = () => {
 
   const handleSaveContext = async (contextData) => {
     try {
+      const payload = {
+        name: contextData.name,
+        emoji: contextData.emoji,
+        fieldType: contextData.fieldType
+      };
       if (contextData.id) {
-        // Update existing context
-        await apiService.updateContext(contextData.id, {
-          name: contextData.name,
-          emoji: contextData.emoji,
-          color: contextData.color
-        });
+        await apiService.updateContext(contextData.id, payload);
       } else {
-        // Create new context
-        await apiService.createContext({
-          name: contextData.name,
-          emoji: contextData.emoji,
-          color: contextData.color
-        });
+        await apiService.createContext(payload);
       }
       
       await fetchContexts();
       handleCloseSettings();
     } catch (err) {
       console.error('Error saving context:', err);
-      alert('Failed to save context');
+      showAppAlert('Failed to save context');
     }
   };
 
@@ -159,7 +158,7 @@ const SecondBrainApp = () => {
       }
     } catch (err) {
       console.error('Error deleting context:', err);
-      alert('Failed to delete context');
+      showAppAlert('Failed to delete context');
     }
   };
 
@@ -238,6 +237,10 @@ const SecondBrainApp = () => {
 
   const renderMainContent = () => {
     if (activeView.type === 'home') {
+      const handleOpenNoteFromHome = (contextId) => {
+        if (!contextId) return;
+        setActiveView({ type: 'context', contextId, app: 'notes' });
+      };
       return (
         <HomeView
           summaryStats={homeStats}
@@ -245,23 +248,16 @@ const SecondBrainApp = () => {
           loading={loading}
           onRequestViewCalendarEvent={handleViewCalendarEventFromTodo}
           onRequestViewLinkedTodo={handleViewTodoFromEvent}
+          onOpenNote={handleOpenNoteFromHome}
         />
       );
     }
 
-    if (activeView.type === 'insights') {
-      return (
-        <div className="text-center py-12">
-          <div className="w-24 h-24 rounded-full bg-indigo-100 flex items-center justify-center mx-auto mb-4">
-            <BarChart3 size={48} className="text-indigo-600" />
-          </div>
-          <h2 className="text-2xl font-semibold text-slate-800 mb-2">Insights Coming Soon</h2>
-          <p className="text-slate-600">Advanced analytics and insights will be available here</p>
-        </div>
-      );
-    }
-
     if (activeView.type === 'context' && currentContext) {
+      const openNotesView = () => {
+        setActiveView({ type: 'context', contextId: currentContext.id, app: 'notes' });
+      };
+
       if (activeView.app === 'overview') {
         return (
           <ContextOverview
@@ -272,6 +268,7 @@ const SecondBrainApp = () => {
             onDataUpdate={handleContextDataUpdate}
             onRequestViewCalendarEvent={handleViewCalendarEventFromTodo}
             onRequestViewLinkedTodo={handleViewTodoFromEvent}
+            onOpenNotes={openNotesView}
           />
         );
       }
@@ -297,16 +294,8 @@ const SecondBrainApp = () => {
         );
       }
 
-      if (activeView.app === 'ideas') {
-        return (
-          <div className="text-center py-12">
-            <div className="w-24 h-24 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
-              <Lightbulb size={48} className="text-purple-600" />
-            </div>
-            <h2 className="text-2xl font-semibold text-slate-800 mb-2">Ideas Coming Soon</h2>
-            <p className="text-slate-600">Capture and organize your ideas</p>
-          </div>
-        );
+      if (activeView.app === 'notes') {
+        return <ContextNotes context={currentContext} />;
       }
 
       if (activeView.app === 'calendar') {
@@ -331,7 +320,9 @@ const SecondBrainApp = () => {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 overflow-hidden">
+    <div className="h-screen bg-slate-100 overflow-hidden">
+      <AppAlert />
+      <ConfirmDialog />
       <div className="flex h-full relative">
         {/* Settings Overlay - Grays out the background */}
         {(showSettingsModal || showAddContextModal) && (
@@ -345,9 +336,8 @@ const SecondBrainApp = () => {
             onClick={() => setSidebarOpen(false)}
           />
         )}
-        
         {/* Mobile sidebar */}
-        <aside className={`md:hidden fixed left-0 top-0 h-full w-64 bg-white/90 backdrop-blur-md border-r border-slate-200/50 flex flex-col shadow-lg z-50 transition-transform duration-300 ease-in-out ${
+        <aside className={`md:hidden fixed left-0 top-0 h-full w-64 bg-slate-100 flex flex-col z-50 transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}>
           <ContextSidebar 
@@ -362,8 +352,8 @@ const SecondBrainApp = () => {
         </aside>
         
         {/* Desktop sidebar */}
-        <aside className={`hidden md:block bg-white/70 backdrop-blur-md flex-col shadow-sm flex-shrink-0 transition-all duration-300 ease-in-out ${
-          sidebarOpen ? 'w-64 border-r border-slate-200/50' : 'w-0'
+        <aside className={`hidden md:block bg-slate-100 flex-col flex-shrink-0 transition-all duration-300 ease-in-out ${
+          sidebarOpen ? 'w-64' : 'w-0'
         }`}>
           <div className={`h-full flex flex-col ${sidebarOpen ? '' : 'invisible'}`}>
             <ContextSidebar 
@@ -381,25 +371,29 @@ const SecondBrainApp = () => {
         {/* Main content */}
         <div className={`flex-1 flex flex-col overflow-hidden ${(showSettingsModal || showAddContextModal) ? 'pointer-events-none' : ''}`}>
           {/* Sticky header with menu button */}
-          {!sidebarOpen && (
-            <div className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/50">
-              <div className="p-4">
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <Menu size={24} className="text-slate-600" />
-                </button>
-              </div>
+          <div className={`sticky top-0 z-30 bg-slate-100 transition-opacity duration-200 ${sidebarOpen ? 'opacity-0 pointer-events-none md:opacity-100 md:pointer-events-auto' : 'opacity-100 pointer-events-auto'}`}>
+            <div className="px-6 sm:px-8 md:px-10 py-3 flex items-center gap-2">
+              <button
+                onClick={() => setSidebarOpen((prev) => !prev)}
+                className={`h-10 w-10 rounded-lg transition-colors items-center justify-center hover:bg-white/60 text-slate-600 ${sidebarOpen ? 'hidden' : 'flex'}`}
+                aria-label="Toggle sidebar"
+              >
+                <Menu size={24} />
+              </button>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className={`hidden md:flex h-10 w-10 rounded-lg transition-colors items-center justify-center hover:bg-white/60 text-slate-600 ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                aria-label="Close sidebar"
+              >
+                <X size={22} />
+              </button>
             </div>
-          )}
+          </div>
 
           {/* Scrollable main content */}
-          <div className="flex-1 overflow-auto">
-            <div className="p-6 md:p-8">
-              <div className="max-w-6xl mx-auto">
-                {renderMainContent()}
-              </div>
+          <div className="flex-1 overflow-auto bg-slate-100">
+            <div className="min-h-full bg-white rounded-3xl mx-0 sm:mx-2 md:mx-4 mt-3 mb-6 px-3 sm:px-4 pb-8">
+              {renderMainContent()}
             </div>
           </div>
         </div>
@@ -416,7 +410,7 @@ const SecondBrainApp = () => {
 
       {/* Add Context Modal (reuse settings modal with no context) */}
       <ContextSettingsModal
-        context={{ name: '', emoji: 'Briefcase', color: '#000000' }}
+        context={{ name: '', emoji: 'Briefcase', fieldType: 'Revenue' }}
         show={showAddContextModal}
         onClose={handleCloseSettings}
         onSave={handleSaveContext}

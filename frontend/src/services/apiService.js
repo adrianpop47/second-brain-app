@@ -63,6 +63,30 @@ class ApiService {
     return this.request(`/contexts/${contextId}/transactions?range=${dateRange}`);
   }
 
+  async getContextNotes(contextId) {
+    return this.request(`/contexts/${contextId}/notes`);
+  }
+
+  async createContextNote(contextId, note) {
+    return this.request(`/contexts/${contextId}/notes`, {
+      method: 'POST',
+      body: JSON.stringify(note),
+    });
+  }
+
+  async deleteNote(noteId) {
+    return this.request(`/notes/${noteId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateNote(noteId, updates) {
+    return this.request(`/notes/${noteId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
   // ============================================================================
   // TRANSACTION ENDPOINTS
   // ============================================================================

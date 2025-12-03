@@ -2,7 +2,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 const IncomeExpenseChart = ({ data }) => {
   return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
+    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200">
       <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-4">Income vs Expenses</h3>
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data}>

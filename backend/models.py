@@ -10,6 +10,7 @@ class Context(db.Model):
     name = db.Column(db.String(100), nullable=False)
     emoji = db.Column(db.String(50), default='Briefcase')
     color = db.Column(db.String(7), default='#000000')
+    field_type = db.Column(db.String(20), default='Revenue')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -24,6 +25,7 @@ class Context(db.Model):
             'name': self.name,
             'emoji': self.emoji,
             'color': self.color,
+            'fieldType': self.field_type or 'Revenue',
             'createdAt': self.created_at.strftime('%Y-%m-%d')
         }
 
@@ -119,8 +121,9 @@ class Idea(db.Model):
             'contextId': self.context_id,
             'title': self.title,
             'description': self.description,
+            'body': self.description,
             'tags': self.tags or [],
-            'createdAt': self.created_at.strftime('%Y-%m-%d')
+            'createdAt': self.created_at.isoformat()
         }
 
 

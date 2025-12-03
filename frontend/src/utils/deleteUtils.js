@@ -1,3 +1,5 @@
+import { confirmAction } from './confirmService';
+
 /**
  * Utility functions for handling deletions with linked items
  */
@@ -14,18 +16,25 @@ export const deleteTodoWithConfirmation = async (todoId, todo, apiService) => {
     // Check if todo has linked calendar events
     const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
     const hasLinkedEvent = Boolean(linkedEventId);
-    const confirmDelete = window.confirm(
-      hasLinkedEvent
-        ? 'This todo is linked to a calendar event. Delete the todo (and optionally the event)?'
-        : 'Are you sure you want to delete this todo?'
-    );
+    const confirmDelete = await confirmAction({
+      title: 'Delete todo?',
+      message: hasLinkedEvent
+        ? 'This todo is linked to a calendar event. You can delete just the todo or remove the linked event as well.'
+        : 'This action cannot be undone.',
+      confirmLabel: hasLinkedEvent ? 'Delete Todo' : 'Delete',
+      tone: 'danger'
+    });
 
     if (!confirmDelete) return false;
 
     if (hasLinkedEvent) {
-      const deleteEventToo = window.confirm(
-        'Do you also want to delete the linked calendar event? (OK = Yes, Cancel = No)'
-      );
+      const deleteEventToo = await confirmAction({
+        title: 'Linked calendar event',
+        message: 'Do you also want to delete the linked calendar event?',
+        confirmLabel: 'Delete event',
+        cancelLabel: 'Keep event',
+        tone: 'danger'
+      });
 
       if (deleteEventToo) {
         try {
@@ -62,18 +71,25 @@ export const deleteEventWithConfirmation = async (eventId, event, apiService) =>
     // Check if event has linked todos
     const linkedTodoId = event.linkedTodoId ?? (event.linkedTodoIds && event.linkedTodoIds[0]);
     const hasLinkedTodo = Boolean(linkedTodoId);
-    const confirmDelete = window.confirm(
-      hasLinkedTodo
-        ? 'This event is linked to a todo. Delete the event (and optionally the todo)?'
-        : 'Are you sure you want to delete this event?'
-    );
+    const confirmDelete = await confirmAction({
+      title: 'Delete event?',
+      message: hasLinkedTodo
+        ? 'This event is linked to a todo. You can delete only the event or remove the linked todo as well.'
+        : 'This action cannot be undone.',
+      confirmLabel: hasLinkedTodo ? 'Delete Event' : 'Delete',
+      tone: 'danger'
+    });
 
     if (!confirmDelete) return false;
 
     if (hasLinkedTodo && linkedTodoId) {
-      const deleteTodoToo = window.confirm(
-        'Do you also want to delete the linked todo? (OK = Yes, Cancel = No)'
-      );
+      const deleteTodoToo = await confirmAction({
+        title: 'Linked todo',
+        message: 'Do you also want to delete the linked todo?',
+        confirmLabel: 'Delete todo',
+        cancelLabel: 'Keep todo',
+        tone: 'danger'
+      });
 
       if (deleteTodoToo) {
         try {
