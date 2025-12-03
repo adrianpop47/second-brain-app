@@ -13,7 +13,7 @@ const ExpenseChart = ({ data, title = 'Expenses by Tag', leadingIcon: LeadingIco
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200">
         {renderTitle()}
         <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
           <Wallet size={48} className="text-slate-300" />
@@ -25,7 +25,7 @@ const ExpenseChart = ({ data, title = 'Expenses by Tag', leadingIcon: LeadingIco
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
+    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200">
       {renderTitle()}
       <ResponsiveContainer width="100%" height={220}>
         <RePieChart>

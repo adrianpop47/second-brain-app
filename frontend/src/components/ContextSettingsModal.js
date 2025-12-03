@@ -1,15 +1,22 @@
 import { useState, useEffect } from 'react';
 import { X, Briefcase, Heart, Home, Book, Music, Coffee, Camera, Plane, ShoppingBag, Dumbbell, GraduationCap, Palette, Code, Zap, Target, Sparkles, Sun, Moon, Star, Gift } from 'lucide-react';
+import { showAppAlert } from '../utils/alertService';
+import { confirmAction } from '../utils/confirmService';
+
+const FIELD_TYPE_OPTIONS = [
+  { value: 'Revenue', label: 'Revenue' },
+  { value: 'Investment', label: 'Investment' },
+  { value: 'Experimental', label: 'Experimental' }
+];
 
 const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
   const [formData, setFormData] = useState({
     name: '',
     emoji: 'Briefcase',
-    color: '#000000'
+    fieldType: 'Revenue'
   });
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Icon options that match the app style
   const iconOptions = [
@@ -35,39 +42,38 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
     { name: 'Gift', icon: Gift, label: 'Gifts' },
   ];
 
-  const commonColors = [
-    '#000000', // Black
-    '#EF4444', // Red
-    '#F59E0B', // Orange
-    '#10B981', // Green
-    '#3B82F6', // Blue
-    '#8B5CF6', // Purple
-    '#EC4899', // Pink
-    '#6366F1', // Indigo
-  ];
-
   useEffect(() => {
     if (context) {
       setFormData({
         name: context.name || '',
         emoji: context.emoji || 'Briefcase',
-        color: context.color || '#000000'
+        fieldType: context.fieldType || 'Revenue'
       });
     }
   }, [context]);
 
   const handleSave = () => {
     if (!formData.name.trim()) {
-      alert('Field name is required');
+      showAppAlert('Field name is required');
       return;
     }
-    onSave({ ...context, ...formData });
+    onSave({
+      id: context?.id,
+      name: formData.name,
+      emoji: formData.emoji,
+      fieldType: formData.fieldType
+    });
   };
 
-  const handleDelete = () => {
-    if (window.confirm(`Are you sure you want to delete "${context.name}"? All data in this field will be permanently deleted.`)) {
-      onDelete(context.id);
-    }
+  const handleDelete = async () => {
+    const confirmed = await confirmAction({
+      title: `Delete "${context.name}"?`,
+      message: 'All data in this field will be permanently removed.',
+      confirmLabel: 'Delete field',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
+    onDelete(context.id);
   };
 
   if (!show) return null;
@@ -147,43 +153,24 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
             </div>
           </div>
 
-          {/* Color */}
+          {/* Field Type */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Color</label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowColorPicker(!showColorPicker)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-left focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent hover:bg-slate-100 transition-colors flex items-center gap-2"
-              >
-                <div 
-                  className="w-6 h-6 rounded-full border-2 border-slate-300"
-                  style={{ backgroundColor: formData.color }}
-                ></div>
-                <span className="text-sm text-slate-600">{formData.color}</span>
-              </button>
-              
-              {showColorPicker && (
-                <div className="absolute z-10 mt-2 w-full bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
-                  <div className="grid grid-cols-4 gap-2">
-                    {commonColors.map(color => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => {
-                          setFormData({ ...formData, color });
-                          setShowColorPicker(false);
-                        }}
-                        className="w-full aspect-square rounded-lg border-2 hover:border-indigo-400 transition-colors"
-                        style={{ 
-                          backgroundColor: color,
-                          borderColor: formData.color === color ? '#6366F1' : '#E2E8F0'
-                        }}
-                      ></button>
-                    ))}
-                  </div>
-                </div>
-              )}
+            <label className="block text-sm font-medium text-slate-700 mb-2">Field Type</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {FIELD_TYPE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, fieldType: option.value })}
+                  className={`rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors ${
+                    formData.fieldType === option.value
+                      ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
 

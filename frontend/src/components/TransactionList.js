@@ -31,7 +31,7 @@ const TransactionList = ({
   const displayedTransactions = filteredTransactions.slice(0, visibleCount);
 
   return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 sm:p-5 shadow-sm border border-slate-200/50">
+    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base sm:text-lg font-semibold text-slate-800">All Transactions</h3>
         <span className="text-sm text-slate-500">

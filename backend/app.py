@@ -8,7 +8,10 @@ import os
 load_dotenv()
 
 # Import database and models
-from models import db, Context, Transaction, Todo, Event
+from models import db, Context, Transaction, Todo, Idea, Event
+
+VALID_CONTEXT_TYPES = {'Revenue', 'Investment', 'Experimental'}
+DEFAULT_CONTEXT_TYPE = 'Revenue'
 
 app = Flask(__name__)
 
@@ -133,18 +136,26 @@ def get_contexts():
 @app.route('/api/contexts', methods=['POST'])
 def create_context():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         
         if not data.get('name'):
             return jsonify({
                 'success': False,
                 'message': 'Context name is required'
             }), 400
+
+        field_type = data.get('fieldType', DEFAULT_CONTEXT_TYPE)
+        if field_type not in VALID_CONTEXT_TYPES:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid field type. Choose Revenue, Investment, or Experimental.'
+            }), 400
         
         new_context = Context(
             name=data.get('name'),
             emoji=data.get('emoji', 'Briefcase'),
-            color=data.get('color', '#000000')
+            color=data.get('color', '#000000'),
+            field_type=field_type
         )
         
         db.session.add(new_context)
@@ -175,11 +186,18 @@ def update_context(context_id):
                 'message': 'Context not found'
             }), 404
         
-        data = request.get_json()
+        data = request.get_json() or {}
         
         context.name = data.get('name', context.name)
         context.emoji = data.get('emoji', context.emoji)
         context.color = data.get('color', context.color)
+        if 'fieldType' in data and data.get('fieldType'):
+            if data['fieldType'] not in VALID_CONTEXT_TYPES:
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid field type. Choose Revenue, Investment, or Experimental.'
+                }), 400
+            context.field_type = data['fieldType']
         
         db.session.commit()
         
@@ -246,6 +264,8 @@ def get_context_overview(context_id):
         
         # Get todos
         todos = Todo.query.filter_by(context_id=context_id).all()
+        # Get notes
+        notes_count = Idea.query.filter_by(context_id=context_id).count()
         
         # Get recent transactions (last 5)
         recent_transactions = sorted(transaction_dicts, key=lambda x: x['date'], reverse=True)[:5]
@@ -260,7 +280,7 @@ def get_context_overview(context_id):
                     'balance': round(balance, 2),
                     'transaction_count': len(transactions),
                     'todo_count': len(todos),
-                    'idea_count': 0,  # TODO: Implement when ideas are added
+                    'idea_count': notes_count,
                     'event_count': 0  # TODO: Implement when events are added
                 },
                 'recent_transactions': recent_transactions
@@ -271,6 +291,141 @@ def get_context_overview(context_id):
         return jsonify({
             'success': False,
             'message': f'Error fetching overview: {str(e)}'
+        }), 500
+
+
+@app.route('/api/contexts/<int:context_id>/notes', methods=['GET'])
+def get_context_notes(context_id):
+    try:
+        context = Context.query.get(context_id)
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Field not found'
+            }), 404
+
+        notes = Idea.query.filter_by(context_id=context_id).order_by(Idea.created_at.desc()).all()
+        return jsonify({
+            'success': True,
+            'data': [note.to_dict() for note in notes],
+            'count': len(notes)
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching notes: {str(e)}'
+        }), 500
+
+
+@app.route('/api/contexts/<int:context_id>/notes', methods=['POST'])
+def add_context_note(context_id):
+    try:
+        context = Context.query.get(context_id)
+        if not context:
+            return jsonify({
+                'success': False,
+                'message': 'Field not found'
+            }), 404
+
+        data = request.get_json() or {}
+        raw_title = data.get('title') or ''
+        raw_body = data.get('body') or data.get('description') or ''
+        title = raw_title
+        body = raw_body
+
+        if not title.strip() and not body.strip():
+            return jsonify({
+                'success': False,
+                'message': 'Note title or body is required'
+            }), 400
+
+        tags = data.get('tags') or []
+        if isinstance(tags, str):
+            tags = [tags]
+        elif not isinstance(tags, list):
+            tags = []
+
+        new_note = Idea(
+            context_id=context_id,
+            title=title or '',
+            description=body,
+            tags=tags
+        )
+        db.session.add(new_note)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'data': new_note.to_dict(),
+            'message': 'Note created successfully'
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error creating note: {str(e)}'
+        }), 500
+
+
+@app.route('/api/notes/<int:note_id>', methods=['DELETE'])
+def delete_note(note_id):
+    try:
+        note = Idea.query.get(note_id)
+        if not note:
+            return jsonify({
+                'success': False,
+                'message': 'Note not found'
+            }), 404
+
+        db.session.delete(note)
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'Note deleted successfully'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error deleting note: {str(e)}'
+        }), 500
+
+
+@app.route('/api/notes/<int:note_id>', methods=['PUT'])
+def update_note(note_id):
+    try:
+        note = Idea.query.get(note_id)
+        if not note:
+            return jsonify({
+                'success': False,
+                'message': 'Note not found'
+            }), 404
+
+        data = request.get_json() or {}
+        if 'title' in data:
+            note.title = data['title'] or ''
+        if 'body' in data or 'description' in data:
+            note.description = data.get('body') or data.get('description') or ''
+        if 'tags' in data:
+            tags = data.get('tags') or []
+            if isinstance(tags, str):
+                tags = [tags]
+            elif not isinstance(tags, list):
+                tags = []
+            note.tags = tags
+        note.updated_at = datetime.utcnow()
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'data': note.to_dict(),
+            'message': 'Note updated successfully'
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error updating note: {str(e)}'
         }), 500
 
 

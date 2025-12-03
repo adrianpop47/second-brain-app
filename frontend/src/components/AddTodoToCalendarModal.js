@@ -3,6 +3,7 @@ import { X, Calendar, Clock } from 'lucide-react';
 import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
 import DurationPicker from './DurationPicker';
+import { showAppAlert } from '../utils/alertService';
 
 const AddTodoToCalendarModal = ({
   showModal,
@@ -47,7 +48,7 @@ const AddTodoToCalendarModal = ({
     e.preventDefault();
 
     if (!eventDate || !eventTime) {
-      alert('Date and time are required');
+      showAppAlert('Date and time are required');
       return;
     }
 
@@ -62,7 +63,7 @@ const AddTodoToCalendarModal = ({
       setShowModal(false);
     } catch (err) {
       console.error('Error adding to calendar:', err);
-      alert('Failed to add to calendar');
+      showAppAlert('Failed to add to calendar');
     } finally {
       setLoading(false);
     }

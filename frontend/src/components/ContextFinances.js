@@ -7,6 +7,8 @@ import TransactionList from './TransactionList';
 import AddTransactionModal from './AddTransactionModal';
 import PeriodSelector from './PeriodSelector';
 import apiService from '../services/apiService';
+import { showAppAlert } from '../utils/alertService';
+import { confirmAction } from '../utils/confirmService';
 
 const ContextFinances = ({ context, dateRange, setDateRange }) => {
   const [transactions, setTransactions] = useState([]);
@@ -65,7 +67,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
 
   const addTransaction = async () => {
     if (!newTransaction.amount) {
-      alert('Amount is required');
+      showAppAlert('Amount is required');
       return;
     }
     
@@ -103,7 +105,7 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
       setShowAddModal(false);
     } catch (err) {
       console.error('Error saving transaction:', err);
-      alert('Failed to save transaction: ' + err.message);
+      showAppAlert('Failed to save transaction: ' + err.message);
     }
   };
 
@@ -121,14 +123,20 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
   };
 
   const handleDeleteTransaction = async (transactionId) => {
-    if (window.confirm('Are you sure you want to delete this transaction?')) {
-      try {
-        await apiService.deleteTransaction(transactionId);
-        await fetchContextData();
-      } catch (err) {
-        console.error('Error deleting transaction:', err);
-        alert('Failed to delete transaction');
-      }
+    const confirmed = await confirmAction({
+      title: 'Delete transaction?',
+      message: 'This transaction will be permanently removed.',
+      confirmLabel: 'Delete',
+      tone: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      await apiService.deleteTransaction(transactionId);
+      await fetchContextData();
+      showAppAlert('Transaction deleted', { type: 'info' });
+    } catch (err) {
+      console.error('Error deleting transaction:', err);
+      showAppAlert('Failed to delete transaction');
     }
   };
 
@@ -154,20 +162,33 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 px-3 sm:px-4 md:px-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-800">{context.name} › Finances</h2>
-            <p className="text-sm text-slate-500">Financial tracking for this field</p>
-          </div>
+      <div className="my-4 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold text-slate-900">Finances</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Track this field’s income, expenses, and running balance in one place.
+          </p>
         </div>
-        <PeriodSelector value={dateRange} onChange={setDateRange} />
+        <div className="flex flex-wrap items-center gap-2">
+          <PeriodSelector value={dateRange} onChange={setDateRange} compact />
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors bg-indigo-500 hover:bg-indigo-600"
+          >
+            <Plus size={16} />
+            Add Transaction
+          </button>
+        </div>
+      </div>
+        <div className="mt-4 h-px bg-slate-100" />
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard 
           icon={TrendingUp}
           label="Income"
@@ -189,13 +210,6 @@ const ContextFinances = ({ context, dateRange, setDateRange }) => {
           variant="balance"
         />
 
-        <StatCard 
-          icon={Plus}
-          label="Action"
-          value="Add Transaction"
-          variant="action"
-          onClick={() => setShowAddModal(true)}
-        />
       </div>
 
       {/* Charts */}

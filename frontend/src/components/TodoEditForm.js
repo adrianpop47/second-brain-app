@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Flag, Tag as TagIcon, X, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
+import { showAppAlert } from '../utils/alertService';
 
 const priorityOptions = [
   { value: 'low', label: 'Low', active: 'bg-slate-500 text-white', inactive: 'bg-slate-100 text-slate-600 hover:bg-slate-200' },
@@ -76,7 +77,7 @@ const TodoEditForm = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formState.title.trim()) {
-      alert('Todo title is required');
+      showAppAlert('Todo title is required');
       return;
     }
     try {
