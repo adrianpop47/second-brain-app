@@ -540,7 +540,7 @@ const ContextOverview = ({
             <div className="p-2 rounded-lg bg-emerald-100">
               <Percent size={18} className="text-emerald-600" />
             </div>
-            <span className="text-xs font-medium text-slate-600">ROI</span>
+            <span className="text-xs font-medium text-slate-600">Hourly Rate</span>
           </div>
           <p className="text-2xl font-semibold text-slate-800">--</p>
         </div>
