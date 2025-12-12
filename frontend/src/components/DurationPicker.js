@@ -14,20 +14,31 @@ const DurationPicker = ({
   value,
   onChange,
   options = DEFAULT_DURATION_OPTIONS,
-  className = ''
+  className = '',
+  allowEmpty = false,
+  placeholder = 'Select duration',
+  clearLabel = 'No duration'
 }) => {
   const [open, setOpen] = useState(false);
   const pickerRef = useRef(null);
 
-  const selectedOption = useMemo(() => {
-    if (typeof value === 'number') {
-      const match = options.find((option) => Number(option.value) === Number(value));
-      if (match) {
-        return match;
-      }
+  const normalizedValue = useMemo(() => {
+    if (allowEmpty && (value === null || value === undefined || value === '')) {
+      return null;
     }
-    return options[0];
-  }, [value, options]);
+    if (value === '' || value === null || value === undefined) {
+      return options[0]?.value ?? null;
+    }
+    return Number(value);
+  }, [value, allowEmpty, options]);
+
+  const selectedOption = useMemo(() => {
+    if (allowEmpty && (value === null || value === undefined || value === '')) {
+      return null;
+    }
+    const match = options.find((option) => Number(option.value) === Number(normalizedValue));
+    return match || null;
+  }, [value, normalizedValue, options, allowEmpty]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -52,12 +63,28 @@ const DurationPicker = ({
         onClick={() => setOpen((prev) => !prev)}
         className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
       >
-        <span>{selectedOption?.label}</span>
+        <span>{selectedOption ? selectedOption.label : placeholder}</span>
         <ChevronDown size={16} className="text-slate-400" />
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-2 w-full bg-white rounded-xl shadow-xl border border-slate-200 z-30 overflow-hidden">
           <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+            {allowEmpty && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange?.(null);
+                  setOpen(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                  value === null || value === undefined || value === ''
+                    ? 'bg-indigo-50 text-indigo-600 font-medium'
+                    : 'hover:bg-slate-50 text-slate-600'
+                }`}
+              >
+                {clearLabel}
+              </button>
+            )}
             {options.map((option) => (
               <button
                 key={option.value}

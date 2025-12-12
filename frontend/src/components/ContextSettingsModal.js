@@ -98,7 +98,9 @@ const ContextSettingsModal = ({ context, show, onClose, onSave, onDelete }) => {
         <div className="space-y-4">
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Name <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={formData.name}

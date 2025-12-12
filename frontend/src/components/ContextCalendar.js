@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Plus, Clock, List as ListIcon, CalendarDays, CalendarClock, CalendarRange, CalendarCheck } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Plus,
+  Clock,
+  List as ListIcon,
+  CalendarDays,
+  CalendarClock,
+  CalendarRange,
+  CalendarCheck
+} from 'lucide-react';
 import MonthView from './MonthView';
 import WeekView from './WeekView';
 import DayView from './DayView';
@@ -39,12 +50,12 @@ const ContextCalendar = ({
   const [quickViewEventId, setQuickViewEventId] = useState(null);
   const [dayDisplayMode, setDayDisplayMode] = useState('timeline');
   const [weekDisplayMode, setWeekDisplayMode] = useState('timeline');
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [dayModeMenuOpen, setDayModeMenuOpen] = useState(false);
   const [weekModeMenuOpen, setWeekModeMenuOpen] = useState(false);
-  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const viewMenuRef = useRef(null);
   const dayModeRef = useRef(null);
   const weekModeRef = useRef(null);
-  const viewMenuRef = useRef(null);
 
   // Fetch events when date or context changes
   useEffect(() => {
@@ -52,11 +63,61 @@ const ContextCalendar = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [context.id, currentDate, currentView]);
 
+  const pendingFocusRef = useRef(null);
+  const isSameDay = (dateA, dateB) => {
+    if (!dateA || !dateB) return false;
+    return (
+      dateA.getFullYear() === dateB.getFullYear() &&
+      dateA.getMonth() === dateB.getMonth() &&
+      dateA.getDate() === dateB.getDate()
+    );
+  };
+
+  useEffect(() => {
+    if (!focusedEventId) return;
+
+    const existing = events.find((event) => event.id === focusedEventId);
+    if (existing) {
+      pendingFocusRef.current = null;
+      const targetDate = new Date(existing.startDate);
+      if (!isSameDay(currentDate, targetDate)) {
+        setCurrentDate(targetDate);
+      }
+      setQuickViewEventId(existing.id);
+      return;
+    }
+
+    pendingFocusRef.current = focusedEventId;
+
+    let cancelled = false;
+
+    const fetchAndFocus = async () => {
+      try {
+        const response = await apiService.getEvent(focusedEventId);
+        if (!cancelled && response?.data?.startDate) {
+          const targetDate = new Date(response.data.startDate);
+          if (!isSameDay(currentDate, targetDate)) {
+            setCurrentDate(targetDate);
+          }
+        }
+      } catch (err) {
+        console.error('Error focusing event:', err);
+      }
+    };
+
+    fetchAndFocus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedEventId, events, currentDate]);
+
   useEffect(() => {
     if (!focusedEventId) return;
     const match = events.find((event) => event.id === focusedEventId);
     if (match) {
       setQuickViewEventId(match.id);
+      pendingFocusRef.current = null;
     }
   }, [focusedEventId, events]);
 
@@ -70,21 +131,21 @@ const ContextCalendar = ({
   }, [events, quickViewEventId, onClearFocus]);
 
   useEffect(() => {
+    setViewMenuOpen(false);
     setDayModeMenuOpen(false);
     setWeekModeMenuOpen(false);
-    setViewMenuOpen(false);
   }, [currentView]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(event.target)) {
+        setViewMenuOpen(false);
+      }
       if (dayModeRef.current && !dayModeRef.current.contains(event.target)) {
         setDayModeMenuOpen(false);
       }
       if (weekModeRef.current && !weekModeRef.current.contains(event.target)) {
         setWeekModeMenuOpen(false);
-      }
-      if (viewMenuRef.current && !viewMenuRef.current.contains(event.target)) {
-        setViewMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -359,6 +420,23 @@ const ContextCalendar = ({
     onClearFocus?.();
   };
 
+  const handleToggleEventComplete = async (eventItem, completed) => {
+    try {
+      await apiService.updateEvent(eventItem.id, { completed });
+      setEvents((prev) =>
+        prev.map((evt) =>
+          evt.id === eventItem.id ? { ...evt, completed } : evt
+        )
+      );
+      if (pendingFocusRef.current === eventItem.id) {
+        pendingFocusRef.current = null;
+      }
+    } catch (err) {
+      console.error('Error updating event completion:', err);
+      showAppAlert('Failed to update event');
+    }
+  };
+
   const currentQuickViewEvent = quickViewEventId
     ? events.find((event) => event.id === quickViewEventId)
     : null;
@@ -459,10 +537,7 @@ const ContextCalendar = ({
                   })()}
                 </div>
                 {(currentView === 'day' || currentView === 'week') && (
-                  <div
-                    className="relative"
-                    ref={currentView === 'day' ? dayModeRef : weekModeRef}
-                  >
+                  <div className="relative" ref={currentView === 'day' ? dayModeRef : weekModeRef}>
                     {(() => {
                       const modeValue = currentView === 'day' ? dayDisplayMode : weekDisplayMode;
                       const setMode = currentView === 'day' ? setDayDisplayMode : setWeekDisplayMode;
@@ -604,6 +679,7 @@ const ContextCalendar = ({
               closeQuickView();
             }
           }}
+          onToggleComplete={handleToggleEventComplete}
         />
       )}
     </div>

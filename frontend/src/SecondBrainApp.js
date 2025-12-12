@@ -246,6 +246,8 @@ const SecondBrainApp = () => {
           summaryStats={homeStats}
           contextData={contextData}
           loading={loading}
+          dateRange={dateRange}
+          onChangeDateRange={setDateRange}
           onRequestViewCalendarEvent={handleViewCalendarEventFromTodo}
           onRequestViewLinkedTodo={handleViewTodoFromEvent}
           onOpenNote={handleOpenNoteFromHome}

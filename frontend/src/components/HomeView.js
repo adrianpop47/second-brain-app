@@ -5,6 +5,7 @@ import ExpenseChart from './ExpenseChart';
 import EditTodoModal from './EditTodoModal';
 import AddTodoToCalendarModal from './AddTodoToCalendarModal';
 import EventModal from './EventModal';
+import PeriodSelector from './PeriodSelector';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 import { deleteTodoWithConfirmation, deleteEventWithConfirmation } from '../utils/deleteUtils';
@@ -60,6 +61,8 @@ const HomeView = ({
   summaryStats, 
   contextData,
   loading,
+  dateRange = 'month',
+  onChangeDateRange = () => {},
   onRequestViewCalendarEvent = () => {},
   onRequestViewLinkedTodo = () => {},
   onOpenNote = () => {}
@@ -81,6 +84,7 @@ const HomeView = ({
   const [recentNotes, setRecentNotes] = useState([]);
   const [notesLoading, setNotesLoading] = useState(true);
   const [openNoteMenuId, setOpenNoteMenuId] = useState(null);
+  const [showGettingStarted, setShowGettingStarted] = useState(false);
   const noteMenuContainerRef = useRef(null);
   const todoMenuRef = useRef(null);
   const eventMenuRef = useRef(null);
@@ -422,59 +426,76 @@ const HomeView = ({
     <div className="space-y-4 px-3 sm:px-4 md:px-6">
       {/* Header */}
       <div className="my-4 -mx-3 sm:-mx-4 md:-mx-6 px-3 sm:px-4 md:px-6 pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-slate-900">Home</h1>
             <p className="text-sm text-slate-500 mt-1">
               See activity across all your fields in one place without switching views.
             </p>
           </div>
+          <PeriodSelector value={dateRange} onChange={onChangeDateRange} compact />
         </div>
         <div className="mt-4 h-px bg-slate-100" />
       </div>
 
       {/* Getting Started */}
       <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-xl p-6 border border-slate-200/50">
-        <h3 className="text-lg font-semibold text-slate-800 mb-4">Getting Started</h3>
-        <div className="space-y-3">
-          <div className="flex items-start gap-3 p-3 bg-indigo-50/50 rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
-              1
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-800">Create Fields</p>
-              <p className="text-xs text-slate-600 mt-0.5">Organize your life into different areas (Work, Health, Personal, etc.)</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3 p-3 bg-emerald-50/50 rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
-              2
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-800">Track Your Finances</p>
-              <p className="text-xs text-slate-600 mt-0.5">Add income and expenses to each field with custom tags</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3 p-3 bg-purple-50/50 rounded-lg">
-            <div className="w-6 h-6 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
-              3
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-800">Manage Your Tasks</p>
-              <p className="text-xs text-slate-600 mt-0.5">Use the Kanban board to organize todos with priorities and due dates</p>
-            </div>
-          </div>
-
-          <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
-            <div className="flex items-center gap-2 mb-1">
-              <Lightbulb size={16} className="text-blue-600" />
-              <p className="text-sm font-semibold text-slate-800">Pro Tip</p>
-            </div>
-            <p className="text-xs text-slate-600">Click on a field in the sidebar to see detailed stats, finances, and todos. Notes and Calendar are coming soon!</p>
-          </div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-800">Getting Started</h3>
+          <button
+            type="button"
+            onClick={() => setShowGettingStarted((prev) => !prev)}
+            className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-medium hover:bg-indigo-100 transition-colors"
+            aria-expanded={showGettingStarted}
+          >
+            {showGettingStarted ? 'Hide' : 'Show'}
+          </button>
         </div>
+        {showGettingStarted && (
+          <div className="space-y-3 mt-4">
+            <div className="flex items-start gap-3 p-3 bg-indigo-50/50 rounded-lg">
+              <div className="w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
+                1
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-800">Create Fields</p>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Organize your life into different areas (Work, Health, Personal, etc.)
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 bg-emerald-50/50 rounded-lg">
+              <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
+                2
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-800">Track Your Finances</p>
+                <p className="text-xs text-slate-600 mt-0.5">Add income and expenses to each field with custom tags</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 bg-purple-50/50 rounded-lg">
+              <div className="w-6 h-6 rounded-full bg-purple-500 text-white flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5">
+                3
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-800">Manage Your Tasks</p>
+                <p className="text-xs text-slate-600 mt-0.5">Use the Kanban board to organize todos with priorities and due dates</p>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
+              <div className="flex items-center gap-2 mb-1">
+                <Lightbulb size={16} className="text-blue-600" />
+                <p className="text-sm font-semibold text-slate-800">Pro Tip</p>
+              </div>
+              <p className="text-xs text-slate-600">
+                Click on a field in the sidebar to see detailed stats, finances, and todos. Notes and Calendar are coming soon!
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards - All white with colored icon backgrounds */}
@@ -924,7 +945,7 @@ const HomeView = ({
         ) : (
           <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
             <Calendar size={40} className="text-slate-300" />
-            <p className="text-slate-500 text-sm">No events scheduled this week.</p>
+            <p className="text-slate-500 text-sm">No upcoming events scheduled.</p>
             <p className="text-slate-400 text-xs">Add events to keep your schedule aligned.</p>
           </div>
         )}

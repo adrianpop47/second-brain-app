@@ -50,10 +50,18 @@ const TodoCard = ({
 
   return (
     <div
-      draggable
-      onDragStart={handleDragStart}
+      draggable={!showMenu}
+      onDragStart={(e) => {
+        if (showMenu) {
+          e.preventDefault();
+          return;
+        }
+        handleDragStart(e);
+      }}
       data-todo-highlight={isFocused ? 'true' : undefined}
-      className={`bg-white rounded-lg p-3 shadow-sm border transition-all cursor-move group ${
+      className={`bg-white rounded-lg p-3 shadow-sm border transition-all ${
+        showMenu ? 'cursor-default' : 'cursor-move'
+      } group ${
         isFocused ? 'border-indigo-400 ring-2 ring-indigo-300' : 'border-slate-200/50 hover:shadow-md'
       }`}
     >

@@ -12,6 +12,7 @@ class Context(db.Model):
     color = db.Column(db.String(7), default='#000000')
     field_type = db.Column(db.String(20), default='Revenue')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    total_time_minutes = db.Column(db.Integer, default=0)
     
     # Relationships
     transactions = db.relationship('Transaction', back_populates='context', cascade='all, delete-orphan')
@@ -26,7 +27,8 @@ class Context(db.Model):
             'emoji': self.emoji,
             'color': self.color,
             'fieldType': self.field_type or 'Revenue',
-            'createdAt': self.created_at.strftime('%Y-%m-%d')
+            'createdAt': self.created_at.strftime('%Y-%m-%d'),
+            'timeMinutes': self.total_time_minutes or 0
         }
 
 
@@ -68,6 +70,7 @@ class Todo(db.Model):
     priority = db.Column(db.String(20), default='medium')  # 'low', 'medium', 'high'
     due_date = db.Column(db.Date)
     due_time = db.Column(db.Time)  # Optional time for due date
+    duration_minutes = db.Column(db.Integer)  # Optional estimated duration in minutes
     tags = db.Column(db.JSON, default=list)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -86,6 +89,7 @@ class Todo(db.Model):
             'priority': self.priority,
             'dueDate': self.due_date.strftime('%Y-%m-%d') if self.due_date else '',
             'dueTime': self.due_time.strftime('%H:%M') if self.due_time else '',
+            'durationHours': round(self.duration_minutes / 60, 2) if self.duration_minutes is not None else None,
             'tags': self.tags or [],
             'createdAt': self.created_at.strftime('%Y-%m-%d'),
             'calendarEventIds': [event.id for event in self.calendar_events],
