@@ -186,6 +186,10 @@ class ApiService {
     return this.request(`/contexts/${contextId}/events?${params}`);
   }
 
+  async getEvent(eventId) {
+    return this.request(`/events/${eventId}`);
+  }
+
   // Create event
   async createEvent(event) {
     return this.request('/events', {

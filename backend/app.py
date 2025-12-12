@@ -38,7 +38,9 @@ def filter_transactions_by_range(transactions, date_range):
     
     now = datetime.now()
     
-    if date_range == 'week':
+    if date_range == 'day':
+        cutoff = datetime(now.year, now.month, now.day)
+    elif date_range == 'week':
         cutoff = now - timedelta(days=7)
     elif date_range == 'month':
         cutoff = now - timedelta(days=30)
@@ -61,6 +63,104 @@ def filter_transactions_by_range(transactions, date_range):
             filtered.append(t)
     
     return filtered
+
+
+def parse_duration_minutes(value):
+    """Convert incoming duration (in hours) to integer minutes."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped == '':
+            return None
+        value = stripped
+    try:
+        hours = float(value)
+        if hours <= 0:
+            return None
+        return int(round(hours * 60))
+    except (TypeError, ValueError):
+        return None
+
+
+def adjust_context_time(context_obj, minutes_delta):
+    if not context_obj or not minutes_delta:
+        return
+    current = context_obj.total_time_minutes or 0
+    updated = current + int(minutes_delta)
+    context_obj.total_time_minutes = max(0, updated)
+
+
+def get_default_due_time(priority):
+    if priority == 'high':
+        return datetime.strptime('09:00', '%H:%M').time()
+    if priority == 'low':
+        return datetime.strptime('17:00', '%H:%M').time()
+    return datetime.strptime('14:00', '%H:%M').time()
+
+
+def normalize_due_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, str) and value:
+        try:
+            return datetime.strptime(value[:10], '%Y-%m-%d').date()
+        except ValueError:
+            return None
+    return value
+
+
+def normalize_due_time(value):
+    if hasattr(value, 'hour'):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            return datetime.strptime(value[:5], '%H:%M').time()
+        except ValueError:
+            return None
+    return value
+
+
+def get_event_duration_minutes(event):
+    if not event or not event.start_date:
+        return 0
+    if event.all_day:
+        return 24 * 60
+    if event.end_date:
+        diff_seconds = (event.end_date - event.start_date).total_seconds()
+        return max(0, int(round(diff_seconds / 60)))
+    # Default 1 hour block if no end date yet
+    return 60
+
+
+def get_todo_duration_minutes(todo):
+    if not todo:
+        return 0
+    if todo.duration_minutes:
+        return todo.duration_minutes
+    if todo.calendar_events:
+        return get_event_duration_minutes(todo.calendar_events[0])
+    return 0
+
+
+def apply_duration_to_event(event_obj, duration_minutes):
+    """Update an event's end (or start) based on a duration while preserving existing schedule."""
+    if not event_obj:
+        return
+    try:
+        minutes = int(duration_minutes or 0)
+    except (TypeError, ValueError):
+        return
+    if minutes <= 0:
+        return
+    if event_obj.start_date:
+        event_obj.end_date = event_obj.start_date + timedelta(minutes=minutes)
+    elif event_obj.end_date:
+        event_obj.start_date = event_obj.end_date - timedelta(minutes=minutes)
+    else:
+        anchor = datetime.now().replace(second=0, microsecond=0)
+        event_obj.start_date = anchor
+        event_obj.end_date = anchor + timedelta(minutes=minutes)
 
 
 def parse_date_param(value, is_end=False):
@@ -281,7 +381,8 @@ def get_context_overview(context_id):
                     'transaction_count': len(transactions),
                     'todo_count': len(todos),
                     'idea_count': notes_count,
-                    'event_count': 0  # TODO: Implement when events are added
+                    'event_count': 0,  # TODO: Implement when events are added
+                    'time_minutes': context.total_time_minutes or 0
                 },
                 'recent_transactions': recent_transactions
             }
@@ -729,7 +830,8 @@ def create_event():
             tags=data.get('tags', []),
             recurring=data.get('recurring', False),
             recurrence_type=data.get('recurrenceType'),
-            recurrence_end_date=recurrence_end_date
+            recurrence_end_date=recurrence_end_date,
+            completed=data.get('completed', False)
         )
         
         db.session.add(new_event)
@@ -749,6 +851,28 @@ def create_event():
         }), 500
 
 
+@app.route('/api/events/<int:event_id>', methods=['GET'])
+def get_event(event_id):
+    try:
+        event = Event.query.get(event_id)
+
+        if not event:
+            return jsonify({
+                'success': False,
+                'message': 'Event not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'data': event.to_dict()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Error fetching event: {str(e)}'
+        }), 500
+
+
 @app.route('/api/events/<int:event_id>', methods=['PUT'])
 def update_event(event_id):
     try:
@@ -761,6 +885,8 @@ def update_event(event_id):
             }), 404
         
         data = request.get_json()
+        previous_completed = event.completed
+        previous_duration = get_event_duration_minutes(event)
         
         # Update fields
         duration_hours_param = None
@@ -785,7 +911,7 @@ def update_event(event_id):
         if 'tags' in data:
             event.tags = data['tags']
         if 'completed' in data:
-            event.completed = data['completed']
+            event.completed = bool(data['completed'])
         if 'recurring' in data:
             event.recurring = data['recurring']
         if 'recurrenceType' in data:
@@ -805,6 +931,8 @@ def update_event(event_id):
             # Default to 1 hour block when no explicit duration/end is provided
             event.end_date = event.start_date + timedelta(hours=1)
         
+        new_duration = get_event_duration_minutes(event)
+
         # Keep linked todos in sync with event updates
         if event.linked_todos:
             for todo in event.linked_todos:
@@ -812,6 +940,16 @@ def update_event(event_id):
                 if event.description is not None:
                     todo.description = event.description
                 todo.tags = event.tags or []
+                todo.duration_minutes = new_duration
+                if 'completed' in data:
+                    todo.status = 'done' if event.completed else 'todo'
+        if event.context:
+            if not previous_completed and event.completed:
+                adjust_context_time(event.context, new_duration)
+            elif previous_completed and not event.completed:
+                adjust_context_time(event.context, -previous_duration)
+            elif previous_completed and event.completed and new_duration != previous_duration:
+                adjust_context_time(event.context, new_duration - previous_duration)
         
         db.session.commit()
         
@@ -833,18 +971,23 @@ def update_event(event_id):
 def delete_event(event_id):
     try:
         event = Event.query.get(event_id)
-        
         if not event:
             return jsonify({
                 'success': False,
                 'message': 'Event not found'
             }), 404
         
+        was_completed = event.completed
+        event_duration = get_event_duration_minutes(event)
+        event_context = event.context
+        
         # Detach any linked todos via the association table
         if event.linked_todos:
             event.linked_todos = []
         
         db.session.delete(event)
+        if was_completed and event_context:
+            adjust_context_time(event_context, -event_duration)
         db.session.commit()
         
         return jsonify({
@@ -917,6 +1060,14 @@ def add_todo():
             except:
                 pass
         
+        duration_source = None
+        if data:
+            if 'durationHours' in data:
+                duration_source = data.get('durationHours')
+            elif 'duration' in data:
+                duration_source = data.get('duration')
+        duration_minutes = parse_duration_minutes(duration_source)
+
         new_todo = Todo(
             context_id=data.get('contextId'),
             title=data.get('title'),
@@ -925,6 +1076,7 @@ def add_todo():
             priority=data.get('priority', 'medium'),
             due_date=due_date,
             due_time=due_time,
+            duration_minutes=duration_minutes,
             tags=data.get('tags', [])
         )
         
@@ -957,11 +1109,8 @@ def update_todo(todo_id):
             }), 404
         
         data = request.get_json()
-        
-        # Track if status changed to 'done'
-        status_changed_to_done = False
-        if 'status' in data and data['status'] == 'done' and todo.status != 'done':
-            status_changed_to_done = True
+        original_status = todo.status
+        original_duration = get_todo_duration_minutes(todo)
         
         # Update only provided fields
         if 'title' in data:
@@ -990,19 +1139,67 @@ def update_todo(todo_id):
                     pass
             else:
                 todo.due_time = None
+        duration_explicitly_set = 'durationHours' in data or 'duration' in data
+        if duration_explicitly_set:
+            duration_source = data.get('durationHours') if 'durationHours' in data else data.get('duration')
+            todo.duration_minutes = parse_duration_minutes(duration_source)
         
-        # If todo is marked as done and has linked calendar events, mark all events as completed
-        if status_changed_to_done and todo.calendar_events:
-            for event in todo.calendar_events:
-                event.completed = True
-        
-        # Keep linked events in sync with todo title/description/tags
-        if todo.calendar_events:
-            for event in todo.calendar_events:
-                event.title = todo.title
-                if todo.description:
-                    event.description = todo.description
-                event.tags = todo.tags or []
+        linked_events = list(todo.calendar_events or [])
+        status_changed_to_done = original_status != 'done' and todo.status == 'done'
+        status_changed_from_done = original_status == 'done' and todo.status != 'done'
+
+        if linked_events and (todo.duration_minutes is None or todo.duration_minutes <= 0):
+            inferred_duration = get_event_duration_minutes(linked_events[0])
+            if inferred_duration:
+                todo.duration_minutes = inferred_duration
+            elif original_duration:
+                todo.duration_minutes = original_duration
+
+        duration_minutes_new = todo.duration_minutes
+        effective_original_duration = original_duration or 0
+        effective_new_duration = duration_minutes_new if duration_minutes_new is not None else 0
+        duration_changed = duration_explicitly_set and effective_new_duration != effective_original_duration
+
+        if linked_events:
+            if not todo.duration_minutes or todo.duration_minutes <= 0:
+                db.session.rollback()
+                return jsonify({
+                    'success': False,
+                    'message': 'Linked todos require a duration.'
+                }), 400
+
+            if duration_changed:
+                for event in linked_events:
+                    apply_duration_to_event(event, todo.duration_minutes)
+            if status_changed_to_done:
+                added = False
+                for event in linked_events:
+                    if not event.completed:
+                        event.completed = True
+                        if not added and event.context:
+                            adjust_context_time(event.context, effective_new_duration)
+                            added = True
+            elif status_changed_from_done:
+                adjusted = False
+                for event in linked_events:
+                    if event.completed and not adjusted and event.context:
+                        adjust_context_time(event.context, -effective_original_duration)
+                        adjusted = True
+                    event.completed = False
+            elif todo.status == 'done' and duration_changed:
+                duration_delta = effective_new_duration - effective_original_duration
+                if duration_delta != 0:
+                    for event in linked_events:
+                        if event.completed and event.context:
+                            adjust_context_time(event.context, duration_delta)
+                            break
+        else:
+            if status_changed_to_done and todo.context:
+                adjust_context_time(todo.context, effective_new_duration)
+            elif status_changed_from_done and todo.context:
+                adjust_context_time(todo.context, -effective_original_duration)
+            elif todo.status == 'done' and duration_changed and todo.context:
+                adjust_context_time(todo.context, effective_new_duration - effective_original_duration)
         
         db.session.commit()
         
@@ -1032,40 +1229,52 @@ def add_todo_to_calendar(todo_id):
             }), 404
         
         data = request.get_json()
+        previous_duration = get_todo_duration_minutes(todo)
         
         # Get date and time from request or use todo's due date/time
         event_date = data.get('date')
         event_time = data.get('time')
-        duration_hours = data.get('duration', 1)  # Default 1 hour
-        
-        # Parse date
+        duration_minutes = parse_duration_minutes(data.get('duration'))
+        if duration_minutes is None or duration_minutes <= 0:
+            duration_minutes = todo.duration_minutes or 60
+        if duration_minutes <= 0:
+            duration_minutes = 60
+
+        start_date = None
+        start_time = None
         if event_date:
-            start_date = datetime.strptime(event_date, '%Y-%m-%d')
-        elif todo.due_date:
-            start_date = datetime.combine(todo.due_date, datetime.min.time())
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Date is required'
-            }), 400
-        
-        # Parse time
+            try:
+                start_date = datetime.strptime(event_date, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid start date format'
+                }), 400
         if event_time:
-            time_obj = datetime.strptime(event_time, '%H:%M').time()
-        elif todo.due_time:
-            time_obj = todo.due_time
+            try:
+                start_time = datetime.strptime(event_time, '%H:%M').time()
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Invalid start time format'
+                }), 400
+
+        default_due_time = todo.due_time or get_default_due_time(todo.priority)
+        if start_date and start_time:
+            start_datetime = datetime.combine(start_date, start_time)
+        elif start_date:
+            start_datetime = datetime.combine(start_date, start_time or default_due_time)
+        elif start_time and todo.due_date:
+            start_datetime = datetime.combine(todo.due_date, start_time)
+        elif start_time:
+            start_datetime = datetime.combine(datetime.now().date(), start_time)
+        elif todo.due_date:
+            due_reference = datetime.combine(todo.due_date, default_due_time)
+            start_datetime = due_reference - timedelta(minutes=duration_minutes)
         else:
-            # Default time based on priority
-            if todo.priority == 'high':
-                time_obj = datetime.strptime('09:00', '%H:%M').time()
-            elif todo.priority == 'low':
-                time_obj = datetime.strptime('17:00', '%H:%M').time()
-            else:
-                time_obj = datetime.strptime('14:00', '%H:%M').time()
-        
-        # Combine date and time
-        start_datetime = datetime.combine(start_date.date(), time_obj)
-        end_datetime = start_datetime + timedelta(hours=duration_hours)
+            start_datetime = datetime.now().replace(second=0, microsecond=0)
+
+        end_datetime = start_datetime + timedelta(minutes=duration_minutes)
         
         # Ensure todo only has one linked event
         for existing_event in list(todo.calendar_events):
@@ -1076,11 +1285,12 @@ def add_todo_to_calendar(todo_id):
         new_event = Event(
             context_id=todo.context_id,
             title=todo.title,
-            description=todo.description or f'Scheduled from todo: {todo.title}',
+            description=todo.description or '',
             start_date=start_datetime,
             end_date=end_datetime,
             all_day=False,
-            tags=todo.tags or []
+            tags=todo.tags or [],
+            completed=todo.status == 'done'
         )
         
         db.session.add(new_event)
@@ -1088,7 +1298,14 @@ def add_todo_to_calendar(todo_id):
         
         # Link todo to event (many-to-many)
         todo.calendar_events.append(new_event)
-        
+        todo.duration_minutes = duration_minutes
+
+        if todo.context and todo.status == 'done':
+            new_duration = duration_minutes or get_event_duration_minutes(new_event)
+            diff = (new_duration or 0) - (previous_duration or 0)
+            if diff:
+                adjust_context_time(todo.context, diff)
+
         db.session.commit()
         
         return jsonify({
@@ -1121,12 +1338,22 @@ def unlink_todo_from_event(todo_id, event_id):
             }), 404
 
         removed = False
+        was_completed = event.completed
+        duration_minutes = get_event_duration_minutes(event)
+        event_context = event.context
         if event in todo.calendar_events:
             todo.calendar_events.remove(event)
             removed = True
 
         # Delete the event to fully remove it from the calendar when detached
         db.session.delete(event)
+        should_adjust_time = (
+            was_completed
+            and event_context
+            and (not todo or todo.status != 'done')
+        )
+        if should_adjust_time:
+            adjust_context_time(event_context, -duration_minutes)
         db.session.commit()
 
         return jsonify({
@@ -1196,7 +1423,17 @@ def delete_todo(todo_id):
                 'message': 'Todo not found'
             }), 404
         
+        duration_minutes = get_todo_duration_minutes(todo)
+        should_adjust_time = (
+            todo.context
+            and todo.status == 'done'
+            and duration_minutes
+            and duration_minutes > 0
+        )
+
         db.session.delete(todo)
+        if should_adjust_time:
+            adjust_context_time(todo.context, -duration_minutes)
         db.session.commit()
         
         return jsonify({

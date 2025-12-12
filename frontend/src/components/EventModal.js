@@ -101,6 +101,10 @@ const EventModal = ({
   const [showRecurrencePicker, setShowRecurrencePicker] = useState(false);
   const recurrencePickerRef = useRef(null);
   const previousTimeRef = useRef('');
+  const hasLinkedTodo = Boolean(
+    event?.linkedTodoId ||
+      (Array.isArray(event?.linkedTodoIds) && event.linkedTodoIds.length > 0)
+  );
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -403,6 +407,11 @@ const EventModal = ({
                     setFormData((prev) => ({ ...prev, durationHours: value }))
                   }
                 />
+                {hasLinkedTodo && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Changing this duration will also update the linked todo&apos;s duration.
+                  </p>
+                )}
               </div>
             )}
           </div>

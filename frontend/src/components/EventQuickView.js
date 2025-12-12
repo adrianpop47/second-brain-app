@@ -55,7 +55,8 @@ const EventQuickView = ({
   onEdit,
   onDelete,
   onUnlink,
-  onViewLinkedTodo
+  onViewLinkedTodo,
+  onToggleComplete
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -202,6 +203,32 @@ const EventQuickView = ({
               </button>
             </div>
           )}
+          <div className="pt-2 border-t border-slate-100">
+            <label
+              htmlFor={`event-complete-${event.id}`}
+              className="flex items-center gap-3 text-sm font-medium text-slate-700 cursor-pointer select-none"
+            >
+              <span
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                  event.completed ? 'bg-emerald-500' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    event.completed ? 'translate-x-4' : 'translate-x-1'
+                  }`}
+                />
+              </span>
+              Mark as complete
+            </label>
+            <input
+              id={`event-complete-${event.id}`}
+              type="checkbox"
+              className="sr-only"
+              checked={Boolean(event.completed)}
+              onChange={() => onToggleComplete?.(event, !event.completed)}
+            />
+          </div>
         </div>
       </div>
     </div>

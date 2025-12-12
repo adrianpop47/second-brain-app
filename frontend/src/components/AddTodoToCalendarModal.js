@@ -1,42 +1,113 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Calendar, Clock } from 'lucide-react';
-import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
+import TimePicker from './TimePicker';
 import DurationPicker from './DurationPicker';
 import { showAppAlert } from '../utils/alertService';
 
-const AddTodoToCalendarModal = ({
-  showModal,
-  setShowModal,
-  todo,
-  onAdd
-}) => {
-  const [eventDate, setEventDate] = useState('');
-  const [eventTime, setEventTime] = useState('');
+const getDefaultTimeForPriority = (priority = 'medium') => {
+  if (priority === 'high') return '09:00';
+  if (priority === 'low') return '17:00';
+  return '14:00';
+};
+
+const getStartFromTodo = (todo, durationHours) => {
+  const durationMs = Math.max(Number(durationHours) || 1, 0.5) * 60 * 60 * 1000;
+  let endDateTime;
+  if (todo.dueDate) {
+    const timeStr = todo.dueTime || getDefaultTimeForPriority(todo.priority);
+    endDateTime = new Date(`${todo.dueDate}T${timeStr}`);
+  } else {
+    const fallback = new Date();
+    const [hour, minute] = getDefaultTimeForPriority(todo.priority)
+      .split(':')
+      .map(Number);
+    fallback.setHours(hour, minute, 0, 0);
+    endDateTime = fallback;
+  }
+  const startDateTime = new Date(endDateTime.getTime() - durationMs);
+  return {
+    startDateTime,
+    endDateTime
+  };
+};
+
+const getTodoEndDateTime = (todo) => {
+  if (!todo?.dueDate) return null;
+  const timeStr = todo.dueTime || getDefaultTimeForPriority(todo.priority);
+  const due = new Date(`${todo.dueDate}T${timeStr}`);
+  if (Number.isNaN(due.getTime())) return null;
+  return due;
+};
+
+const formatInputDate = (dateObj) => {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return '';
+  const year = dateObj.getFullYear();
+  const month = `${dateObj.getMonth() + 1}`.padStart(2, '0');
+  const day = `${dateObj.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatInputTime = (dateObj) => {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return '';
+  const hours = `${dateObj.getHours()}`.padStart(2, '0');
+  const minutes = `${dateObj.getMinutes()}`.padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+const AddTodoToCalendarModal = ({ showModal, setShowModal, todo, onAdd }) => {
   const [duration, setDuration] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const durationValue = Number(duration) || 0;
+  const safeDurationHours = durationValue > 0 ? durationValue : 1;
+
+  const formatDateLabel = (date) =>
+    date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+
+  const formatTimeLabel = (date) =>
+    date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
   useEffect(() => {
-    if (showModal && todo) {
-      if (todo.dueDate) {
-        setEventDate(todo.dueDate);
-      } else {
-        setEventDate(new Date().toISOString().split('T')[0]);
-      }
+    if (!showModal || !todo) return;
+    const todoDurationHours =
+      typeof todo.durationHours === 'number' && todo.durationHours > 0
+        ? todo.durationHours
+        : typeof todo.durationMinutes === 'number' && todo.durationMinutes > 0
+          ? todo.durationMinutes / 60
+          : null;
+    const resolvedDuration = todoDurationHours || 1;
+    setDuration(resolvedDuration);
 
-      if (todo.dueTime) {
-        setEventTime(todo.dueTime);
-      } else if (todo.priority === 'high') {
-        setEventTime('09:00');
-      } else if (todo.priority === 'low') {
-        setEventTime('17:00');
-      } else {
-        setEventTime('14:00');
-      }
-
-      setDuration(1);
+    const defaults = getStartFromTodo(todo, resolvedDuration);
+    if (defaults?.startDateTime && !Number.isNaN(defaults.startDateTime.getTime())) {
+      setStartDate(formatInputDate(defaults.startDateTime));
+      setStartTime(formatInputTime(defaults.startDateTime));
+    } else {
+      setStartDate('');
+      setStartTime('');
     }
   }, [showModal, todo]);
+
+  const previewRange = useMemo(() => {
+    if (!startDate || !startTime) return null;
+    const start = new Date(`${startDate}T${startTime}`);
+    if (Number.isNaN(start.getTime())) return null;
+
+    const durationMs = safeDurationHours * 60 * 60 * 1000;
+    const end = new Date(start.getTime() + durationMs);
+    return {
+      startDateTime: start,
+      endDateTime: end
+    };
+  }, [startDate, startTime, safeDurationHours]);
+
+  const dueDisplayDateTime = todo ? getTodoEndDateTime(todo) : null;
 
   if (!showModal || !todo) return null;
 
@@ -47,18 +118,25 @@ const AddTodoToCalendarModal = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!eventDate || !eventTime) {
-      showAppAlert('Date and time are required');
+    if (!startDate || !startTime) {
+      showAppAlert('Start date and time are required');
       return;
     }
+    const startDateTime = new Date(`${startDate}T${startTime}`);
+    if (Number.isNaN(startDateTime.getTime())) {
+      showAppAlert('Invalid start date or time');
+      return;
+    }
+    const dateStr = formatInputDate(startDateTime);
+    const timeStr = formatInputTime(startDateTime);
 
     setLoading(true);
 
     try {
       await onAdd({
-        date: eventDate,
-        time: eventTime,
-        duration
+        date: dateStr,
+        time: timeStr,
+        duration: safeDurationHours
       });
       setShowModal(false);
     } catch (err) {
@@ -108,40 +186,45 @@ const AddTodoToCalendarModal = ({
               {todo.priority}
             </span>
           </div>
+          {dueDisplayDateTime && (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600 mt-2">
+              <span className="inline-flex items-center gap-1">
+                <Calendar size={12} className="text-slate-500" />
+                {formatDateLabel(dueDisplayDateTime)}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock size={12} className="text-slate-500" />
+                {formatTimeLabel(dueDisplayDateTime)}
+              </span>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
               <Calendar size={14} />
-              Date <span className="text-red-500">*</span>
+              Start Date
             </label>
-            <DatePicker
-              value={eventDate}
-              onChange={setEventDate}
-              minDate={new Date().toISOString().split('T')[0]}
-              showClear={false}
-            />
+            <DatePicker value={startDate} onChange={setStartDate} showClear={false} />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
               <Clock size={14} />
-              Time <span className="text-red-500">*</span>
+              Start Time
             </label>
             <TimePicker
-              value={eventTime}
-              onChange={(time) => setEventTime(time)}
-              onClear={() => setEventTime('')}
+              value={startTime}
+              onChange={setStartTime}
+              onClear={() => setStartTime('')}
               showIcon={false}
               showClear={false}
             />
             <p className="text-xs text-slate-500 mt-1">
-              Suggested: {todo.priority === 'high'
-                ? '9:00 AM (High priority)'
-                : todo.priority === 'low'
-                  ? '5:00 PM (Low priority)'
-                  : '2:00 PM (Medium priority)'}
+              {previewRange
+                ? `Event will start at ${formatTimeLabel(previewRange.startDateTime)} and finish at ${formatTimeLabel(previewRange.endDateTime)}.`
+                : 'Adjust start time to control when the event begins. The todo due time updates automatically.'}
             </p>
           </div>
 
@@ -150,6 +233,9 @@ const AddTodoToCalendarModal = ({
               Duration
             </label>
             <DurationPicker value={duration} onChange={setDuration} />
+            <p className="text-xs text-slate-500 mt-1">
+              This will also update the todo&apos;s duration so both stay aligned.
+            </p>
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -157,14 +243,10 @@ const AddTodoToCalendarModal = ({
               <Calendar size={12} />
               <span>Calendar Event Preview</span>
             </div>
-            {eventDate && eventTime ? (
+            {previewRange ? (
               <p className="text-xs text-blue-700">
-                {new Date(eventDate).toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric'
-                })}{' '}
-                at {eventTime} ({duration}h)
+                {formatDateLabel(previewRange.endDateTime)} · {formatTimeLabel(previewRange.startDateTime)} –{' '}
+                {formatTimeLabel(previewRange.endDateTime)} ({safeDurationHours}h)
               </p>
             ) : (
               <p className="text-xs text-blue-600">Select a date and time to see the preview.</p>

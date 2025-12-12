@@ -114,7 +114,9 @@ const AddTransactionModal = ({
           {/* Field Selector */}
           {!contextId && contexts.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Field</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Field <span className="text-red-500">*</span>
+              </label>
               <select
                 value={newTransaction.contextId || ''}
                 onChange={(e) => setNewTransaction(prev => ({ ...prev, contextId: parseInt(e.target.value) }))}
@@ -161,7 +163,9 @@ const AddTransactionModal = ({
 
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Amount <span className="text-red-500">*</span>
+            </label>
             <input
               type="number"
               step="0.01"
@@ -182,7 +186,9 @@ const AddTransactionModal = ({
 
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Title</label>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Title <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={newTransaction.description || ''}

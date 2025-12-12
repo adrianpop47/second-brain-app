@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, MoreVertical, Edit2, Trash2, Unlink } from 'lucide-react';
+import { TrendingUp, TrendingDown, CheckSquare, Lightbulb, Calendar, CalendarPlus, Clock, Wallet, MoreVertical, Edit2, Trash2, Unlink, Percent } from 'lucide-react';
 import AddTransactionModal from './AddTransactionModal';
 import AddTodoModal from './AddTodoModal';
 import EditTodoModal from './EditTodoModal';
@@ -55,8 +55,18 @@ const getNoteTimestamp = (createdAt) => {
   return { date: formattedDate, time: formattedTime };
 };
 
+const formatDurationDisplay = (minutes = 0) => {
+  const total = Number(minutes) || 0;
+  if (total <= 0) return '0h';
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours && mins) return `${hours}h ${mins}m`;
+  if (hours) return `${hours}h`;
+  return `${mins}m`;
+};
+
 const FIELD_TYPE_BADGE_CLASS =
-  'inline-flex items-center border border-slate-300 bg-white text-slate-700 text-[11px] font-semibold capitalize tracking-[0.02em] px-2.5 py-0.5 rounded-full shadow-sm';
+  'inline-flex items-center text-xs font-semibold text-indigo-600 bg-white px-3 py-1 rounded-full border border-indigo-100';
 
 const ContextOverview = ({
   context,
@@ -465,6 +475,7 @@ const ContextOverview = ({
 
   const fieldType = context.fieldType || 'Revenue';
   const fieldBadgeClass = FIELD_TYPE_BADGE_CLASS;
+  const timeMinutes = stats?.time_minutes ?? 0;
 
   return (
     <div className="space-y-4 px-3 sm:px-4 md:px-6">
@@ -512,6 +523,26 @@ const ContextOverview = ({
             <span className="text-xs font-medium text-slate-600">Balance</span>
           </div>
           <p className="text-2xl font-semibold text-slate-800">${stats.balance?.toFixed(2) || '0.00'}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl p-4 border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 rounded-lg bg-blue-100">
+              <Clock size={18} className="text-blue-600" />
+            </div>
+            <span className="text-xs font-medium text-slate-600">Time</span>
+          </div>
+          <p className="text-2xl font-semibold text-slate-800">{formatDurationDisplay(timeMinutes)}</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-2 rounded-lg bg-emerald-100">
+              <Percent size={18} className="text-emerald-600" />
+            </div>
+            <span className="text-xs font-medium text-slate-600">ROI</span>
+          </div>
+          <p className="text-2xl font-semibold text-slate-800">--</p>
         </div>
       </div>
 
@@ -1057,7 +1088,7 @@ const ContextOverview = ({
           ) : (
             <div className="py-10 flex flex-col items-center justify-center text-center gap-1">
               <Calendar size={48} className="text-slate-300" />
-              <p className="text-slate-500 text-sm">No events scheduled</p>
+              <p className="text-slate-500 text-sm">No upcoming events scheduled.</p>
               <p className="text-slate-400 text-xs">Use Add Event to schedule one.</p>
             </div>
           )}

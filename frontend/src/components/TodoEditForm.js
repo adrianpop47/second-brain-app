@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Flag, Tag as TagIcon, X, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
+import DurationPicker from './DurationPicker';
 import { showAppAlert } from '../utils/alertService';
 
 const priorityOptions = [
@@ -16,6 +17,7 @@ const defaultTodo = {
   priority: 'medium',
   dueDate: '',
   dueTime: '',
+  durationHours: '',
   tags: []
 };
 
@@ -29,6 +31,10 @@ const TodoEditForm = ({
   const [formState, setFormState] = useState(defaultTodo);
   const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const hasLinkedEvent = Boolean(
+    todo?.calendarEventId ||
+      (Array.isArray(todo?.calendarEventIds) && todo.calendarEventIds.length > 0)
+  );
 
   useEffect(() => {
     if (todo) {
@@ -38,6 +44,10 @@ const TodoEditForm = ({
         priority: todo.priority || 'medium',
         dueDate: todo.dueDate || '',
         dueTime: todo.dueTime || '',
+        durationHours:
+          typeof todo.durationHours === 'number' && todo.durationHours > 0
+            ? String(todo.durationHours)
+            : '',
         tags: Array.isArray(todo.tags) ? todo.tags : []
       });
       setTagInput('');
@@ -89,6 +99,10 @@ const TodoEditForm = ({
           priority: formState.priority,
           dueDate: formState.dueDate,
           dueTime: formState.dueTime,
+          durationHours: (() => {
+            const parsed = parseFloat(formState.durationHours);
+            return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+          })(),
           tags: formState.tags
         })
       );
@@ -167,6 +181,7 @@ const TodoEditForm = ({
               }
               onClear={clearDueDate}
               showIcon={false}
+              showClear={Boolean(formState.dueDate)}
             />
           </div>
         </div>
@@ -182,12 +197,36 @@ const TodoEditForm = ({
             onClear={clearDueTime}
             disabled={!formState.dueDate}
             showIcon={false}
+            showClear={Boolean(formState.dueTime)}
           />
           {!formState.dueDate && (
             <p className="text-xs text-slate-400 mt-1">
               Select a due date to enable time selection.
             </p>
           )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Duration
+          </label>
+          <DurationPicker
+            value={formState.durationHours === '' ? null : Number(formState.durationHours)}
+            onChange={(val) =>
+              setFormState((prev) => ({
+                ...prev,
+                durationHours: val === null ? '' : String(val)
+              }))
+            }
+            allowEmpty={!hasLinkedEvent}
+            placeholder="Duration"
+            clearLabel="No duration"
+          />
+          <p className="text-xs text-slate-400 mt-1">
+            {hasLinkedEvent
+              ? 'Updating this duration also updates the linked calendar event.'
+              : 'Optional estimate to plan your effort.'}
+          </p>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Flag, Tag as TagIcon, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 import TimePicker from './TimePicker';
 import DatePicker from './DatePicker';
+import DurationPicker from './DurationPicker';
 import { showAppAlert } from '../utils/alertService';
 
 const AddTodoModal = ({ 
@@ -15,6 +16,7 @@ const AddTodoModal = ({
     priority: 'medium',
     dueDate: '',
     dueTime: '',
+    durationHours: '',
     tags: [],
     status: 'todo'
   });
@@ -67,6 +69,10 @@ const AddTodoModal = ({
     // Call onAdd with the todo data
     onAdd({
       ...formData,
+      durationHours: (() => {
+        const parsed = parseFloat(formData.durationHours);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      })(),
       status: formData.status || 'todo'
     });
     
@@ -77,6 +83,7 @@ const AddTodoModal = ({
       priority: 'medium',
       dueDate: '',
       dueTime: '',
+      durationHours: '',
       tags: [],
       status: 'todo'
     });
@@ -92,6 +99,7 @@ const AddTodoModal = ({
       priority: 'medium',
       dueDate: '',
       dueTime: '',
+      durationHours: '',
       tags: [],
       status: 'todo'
     });
@@ -231,6 +239,28 @@ const AddTodoModal = ({
                   Select a due date to enable time selection.
                 </p>
               )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+                Duration
+              </label>
+              <DurationPicker
+                value={
+                  formData.durationHours === '' ? null : Number(formData.durationHours)
+                }
+                onChange={(val) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    durationHours: val === null ? '' : String(val)
+                  }))
+                }
+                allowEmpty
+                placeholder="Duration"
+                clearLabel="No duration"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Optional. Estimate how long this task should take.
+              </p>
             </div>
           </div>
 
