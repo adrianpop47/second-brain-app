@@ -31,37 +31,54 @@ db.init_app(app)
 # HELPER FUNCTIONS
 # ============================================================================
 
+def get_range_window(date_range):
+    """Return start and end datetimes for the requested range."""
+    now = datetime.now()
+    start = end = None
+
+    if date_range == 'day':
+        start = datetime(now.year, now.month, now.day)
+        end = start + timedelta(days=1)
+    elif date_range == 'week':
+        start = datetime(now.year, now.month, now.day)
+        weekday = start.weekday()  # Monday=0
+        start -= timedelta(days=weekday)
+        end = start + timedelta(days=7)
+    elif date_range == 'month':
+        start = datetime(now.year, now.month, 1)
+        if now.month == 12:
+            end = datetime(now.year + 1, 1, 1)
+        else:
+            end = datetime(now.year, now.month + 1, 1)
+    elif date_range == 'year':
+        start = datetime(now.year, 1, 1)
+        end = datetime(now.year + 1, 1, 1)
+
+    return start, end
+
+
 def filter_transactions_by_range(transactions, date_range):
-    """Filter transactions by date range"""
+    """Filter transactions by date range."""
     if date_range == 'all':
         return transactions
-    
-    now = datetime.now()
-    
-    if date_range == 'day':
-        cutoff = datetime(now.year, now.month, now.day)
-    elif date_range == 'week':
-        cutoff = now - timedelta(days=7)
-    elif date_range == 'month':
-        cutoff = now - timedelta(days=30)
-    elif date_range == 'year':
-        cutoff = now - timedelta(days=365)
-    else:
+
+    start, end = get_range_window(date_range)
+    if not start and not end:
         return transactions
-    
-    # Handle both dict and model objects
+
     filtered = []
     for t in transactions:
         if isinstance(t, dict):
-            # Already converted to dict
             trans_date = datetime.strptime(t['date'], '%Y-%m-%d')
         else:
-            # Model object
             trans_date = datetime.combine(t.date, datetime.min.time())
-        
-        if trans_date >= cutoff:
-            filtered.append(t)
-    
+
+        if start and trans_date < start:
+            continue
+        if end and trans_date >= end:
+            continue
+        filtered.append(t)
+
     return filtered
 
 
@@ -353,13 +370,16 @@ def get_context_overview(context_id):
                 'message': 'Context not found'
             }), 404
         
+        date_range = request.args.get('range', 'all')
+
         # Get transactions
         transactions = Transaction.query.filter_by(context_id=context_id).all()
-        transaction_dicts = [t.to_dict() for t in transactions]
+        filtered_transactions = filter_transactions_by_range(transactions, date_range)
+        transaction_dicts = [t.to_dict() for t in filtered_transactions]
         
         # Calculate stats
-        total_income = sum(t.amount for t in transactions if t.type == 'income')
-        total_expenses = sum(t.amount for t in transactions if t.type == 'expense')
+        total_income = sum(t.amount for t in filtered_transactions if t.type == 'income')
+        total_expenses = sum(t.amount for t in filtered_transactions if t.type == 'expense')
         balance = total_income - total_expenses
         
         # Get todos
@@ -378,7 +398,7 @@ def get_context_overview(context_id):
                     'total_income': round(total_income, 2),
                     'total_expenses': round(total_expenses, 2),
                     'balance': round(balance, 2),
-                    'transaction_count': len(transactions),
+                    'transaction_count': len(filtered_transactions),
                     'todo_count': len(todos),
                     'idea_count': notes_count,
                     'event_count': 0,  # TODO: Implement when events are added
@@ -977,6 +997,7 @@ def delete_event(event_id):
                 'message': 'Event not found'
             }), 404
         
+        preserve_time = request.args.get('preserveTime', 'false').lower() == 'true'
         was_completed = event.completed
         event_duration = get_event_duration_minutes(event)
         event_context = event.context
@@ -986,7 +1007,7 @@ def delete_event(event_id):
             event.linked_todos = []
         
         db.session.delete(event)
-        if was_completed and event_context:
+        if was_completed and event_context and not preserve_time:
             adjust_context_time(event_context, -event_duration)
         db.session.commit()
         
@@ -1337,6 +1358,8 @@ def unlink_todo_from_event(todo_id, event_id):
                 'message': 'Todo or Event not found'
             }), 404
 
+        keep_event = request.args.get('keepEvent', 'false').lower() == 'true'
+
         removed = False
         was_completed = event.completed
         duration_minutes = get_event_duration_minutes(event)
@@ -1345,20 +1368,26 @@ def unlink_todo_from_event(todo_id, event_id):
             todo.calendar_events.remove(event)
             removed = True
 
-        # Delete the event to fully remove it from the calendar when detached
-        db.session.delete(event)
-        should_adjust_time = (
-            was_completed
-            and event_context
-            and (not todo or todo.status != 'done')
-        )
-        if should_adjust_time:
-            adjust_context_time(event_context, -duration_minutes)
+        action_message = 'Todo unlinked from event' if removed else 'Event deleted'
+
+        if not keep_event:
+            # Delete the event to fully remove it from the calendar when detached
+            db.session.delete(event)
+            should_adjust_time = (
+                was_completed
+                and event_context
+                and (not todo or todo.status != 'done')
+            )
+            if should_adjust_time:
+                adjust_context_time(event_context, -duration_minutes)
+        else:
+            action_message = 'Todo unlinked from event'
+
         db.session.commit()
 
         return jsonify({
             'success': True,
-            'message': 'Todo unlinked from event' if removed else 'Event deleted'
+            'message': action_message
         }), 200
     except Exception as e:
         db.session.rollback()
@@ -1422,13 +1451,15 @@ def delete_todo(todo_id):
                 'success': False,
                 'message': 'Todo not found'
             }), 404
-        
+
+        preserve_time = request.args.get('preserveTime', 'false').lower() == 'true'
         duration_minutes = get_todo_duration_minutes(todo)
         should_adjust_time = (
             todo.context
             and todo.status == 'done'
             and duration_minutes
             and duration_minutes > 0
+            and not preserve_time
         )
 
         db.session.delete(todo)

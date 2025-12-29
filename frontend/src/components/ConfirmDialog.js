@@ -10,6 +10,11 @@ const toneStyles = {
   }
 };
 
+const optionToneClasses = {
+  danger: 'bg-rose-500 hover:bg-rose-600 text-white',
+  default: 'bg-slate-800 hover:bg-slate-900 text-white'
+};
+
 const ConfirmDialog = () => {
   const [request, setRequest] = useState(null);
 
@@ -23,6 +28,9 @@ const ConfirmDialog = () => {
   if (!request) return null;
 
   const tone = toneStyles[request.tone] || toneStyles.default;
+  const hasOptions = Array.isArray(request.options) && request.options.length > 0;
+
+  const getOptionClass = (toneKey) => optionToneClasses[toneKey] || optionToneClasses.default;
 
   const handleResponse = (result) => {
     sendConfirmResponse(request.id, result);
@@ -36,7 +44,7 @@ const ConfirmDialog = () => {
         {request.message && (
           <p className="text-sm mt-2 text-slate-600 whitespace-pre-wrap">{request.message}</p>
         )}
-        <div className="flex justify-end gap-3 mt-6">
+        <div className="flex flex-nowrap justify-end gap-3 mt-6">
           <button
             type="button"
             onClick={() => handleResponse(false)}
@@ -44,13 +52,26 @@ const ConfirmDialog = () => {
           >
             {request.cancelLabel || 'Cancel'}
           </button>
-          <button
-            type="button"
-            onClick={() => handleResponse(true)}
-            className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${tone.confirm}`}
-          >
-            {request.confirmLabel || 'Confirm'}
-          </button>
+          {hasOptions ? (
+            request.options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => handleResponse(option.value)}
+                className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${getOptionClass(option.tone || 'default')}`}
+              >
+                {option.label}
+              </button>
+            ))
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleResponse(true)}
+              className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium ${tone.confirm}`}
+            >
+              {request.confirmLabel || 'Confirm'}
+            </button>
+          )}
         </div>
       </div>
     </div>

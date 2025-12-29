@@ -57,12 +57,12 @@ const SecondBrainApp = () => {
 // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange, activeView.type]);
 
-  // Fetch context overview when navigating to a context
+  // Fetch context overview when navigating to a context or changing date range
   useEffect(() => {
     if (activeView.type === 'context' && activeView.app === 'overview') {
-      fetchContextOverview(activeView.contextId);
+      fetchContextOverview(activeView.contextId, dateRange);
     }
-  }, [activeView]);
+  }, [activeView, dateRange]);
 
   const fetchContexts = async () => {
     try {
@@ -91,10 +91,10 @@ const SecondBrainApp = () => {
     }
   };
 
-  const fetchContextOverview = async (contextId) => {
+  const fetchContextOverview = async (contextId, range = dateRange) => {
     try {
       setOverviewLoading(true);
-      const response = await apiService.getContextOverview(contextId);
+      const response = await apiService.getContextOverview(contextId, range);
       setContextOverview(response.data);
       setOverviewLoading(false);
     } catch (err) {
@@ -177,7 +177,7 @@ const SecondBrainApp = () => {
   const handleContextDataUpdate = async () => {
     // Refresh context overview data
     if (activeView.type === 'context' && activeView.contextId) {
-      await fetchContextOverview(activeView.contextId);
+      await fetchContextOverview(activeView.contextId, dateRange);
     }
     
     // ALSO refresh home data so it shows in Home view
@@ -267,6 +267,8 @@ const SecondBrainApp = () => {
             stats={contextOverview?.stats || {}}
             recentTransactions={contextOverview?.recent_transactions || []}
             loading={overviewLoading}
+            dateRange={dateRange}
+            onChangeDateRange={setDateRange}
             onDataUpdate={handleContextDataUpdate}
             onRequestViewCalendarEvent={handleViewCalendarEventFromTodo}
             onRequestViewLinkedTodo={handleViewTodoFromEvent}

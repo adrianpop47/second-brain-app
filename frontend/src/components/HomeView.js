@@ -11,6 +11,7 @@ import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 import { deleteTodoWithConfirmation, deleteEventWithConfirmation } from '../utils/deleteUtils';
 import { showAppAlert } from '../utils/alertService';
 import { confirmAction } from '../utils/confirmService';
+import { getRangeBounds, isWithinRange, formatDateParam } from '../utils/dateRangeUtils';
 
 const SectionCard = ({
   title,
@@ -91,15 +92,18 @@ const HomeView = ({
 
   useEffect(() => {
     fetchAllTodos();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange]);
 
   useEffect(() => {
     fetchUpcomingEvents();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange]);
 
   useEffect(() => {
     fetchRecentNotes();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange]);
 
   useEffect(() => {
     if (!openNoteMenuId) {
@@ -153,13 +157,22 @@ const HomeView = ({
   const fetchUpcomingEvents = async () => {
     try {
       setEventsLoading(true);
-      const start = new Date();
-      const end = new Date();
-      end.setDate(start.getDate() + 7);
-      const format = (date) => date.toISOString().split('T')[0];
-      const response = await apiService.getEvents(format(start), format(end));
-      const upcoming = response.data
-        .filter((event) => new Date(event.startDate) >= start)
+      const { start, end } = getRangeBounds(dateRange);
+      const now = new Date();
+      const effectiveStart = start ? new Date(Math.max(start.getTime(), now.getTime())) : now;
+      const response = await apiService.getEvents(
+        formatDateParam(effectiveStart),
+        formatDateParam(end)
+      );
+      const upcoming = (response.data || [])
+        .filter((event) => {
+          const eventDate = new Date(event.startDate);
+          if (Number.isNaN(eventDate.getTime())) return false;
+          if (eventDate < now) return false;
+          if (start && eventDate < start) return false;
+          if (end && eventDate > end) return false;
+          return true;
+        })
         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
         .slice(0, 5);
       setUpcomingEvents(upcoming);
@@ -173,6 +186,7 @@ const HomeView = ({
   const fetchRecentNotes = async () => {
     try {
       setNotesLoading(true);
+      const { start, end } = getRangeBounds(dateRange);
       const contextsRes = await apiService.getContexts();
       const contextsList = contextsRes.data || [];
       const notesByContext = await Promise.all(
@@ -193,7 +207,13 @@ const HomeView = ({
         })
       );
       const combined = notesByContext.flat().sort((a, b) => getNoteSortValue(b) - getNoteSortValue(a));
-      setRecentNotes(combined.slice(0, 5));
+      const filtered = combined.filter((note) => {
+        if (!start && !end) return true;
+        const referenceDate = note.updatedAt || note.modifiedAt || note.createdAt;
+        if (!referenceDate) return false;
+        return isWithinRange(referenceDate, start, end);
+      });
+      setRecentNotes(filtered.slice(0, 5));
     } catch (err) {
       console.error('Error fetching recent notes:', err);
       setRecentNotes([]);
@@ -205,6 +225,7 @@ const HomeView = ({
   const fetchAllTodos = async () => {
     try {
       setTodosLoading(true);
+      const { start, end } = getRangeBounds(dateRange);
       // Get contexts first
       const contextsRes = await apiService.getContexts();
       setContexts(contextsRes.data);
@@ -227,6 +248,12 @@ const HomeView = ({
       // Filter for active todos and sort by due date
       const activeTodos = allTodosData
         .filter(todo => todo.status !== 'done')
+        .filter((todo) => {
+          if (!start && !end) return true;
+          if (!todo.dueDate) return false;
+          const dueValue = `${todo.dueDate}T${todo.dueTime || '00:00:00'}`;
+          return isWithinRange(dueValue, start, end);
+        })
         .sort((a, b) => {
           if (!a.dueDate) return 1;
           if (!b.dueDate) return -1;

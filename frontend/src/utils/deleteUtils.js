@@ -16,40 +16,50 @@ export const deleteTodoWithConfirmation = async (todoId, todo, apiService) => {
     // Check if todo has linked calendar events
     const linkedEventId = todo.calendarEventId ?? (todo.calendarEventIds && todo.calendarEventIds[0]);
     const hasLinkedEvent = Boolean(linkedEventId);
-    const confirmDelete = await confirmAction({
-      title: 'Delete todo?',
-      message: hasLinkedEvent
-        ? 'This todo is linked to a calendar event. You can delete just the todo or remove the linked event as well.'
-        : 'This action cannot be undone.',
-      confirmLabel: hasLinkedEvent ? 'Delete Todo' : 'Delete',
-      tone: 'danger'
-    });
-
-    if (!confirmDelete) return false;
-
     if (hasLinkedEvent) {
-      const deleteEventToo = await confirmAction({
+      const selection = await confirmAction({
         title: 'Linked calendar event',
-        message: 'Do you also want to delete the linked calendar event?',
-        confirmLabel: 'Delete event',
-        cancelLabel: 'Keep event',
+        message: 'This todo is linked to a calendar event. Choose what you want to remove.',
+        options: [
+          { label: 'Delete Todo only', value: 'todo-only' },
+          { label: 'Delete both', value: 'both', tone: 'danger' }
+        ],
+        cancelLabel: 'Cancel',
         tone: 'danger'
       });
 
-      if (deleteEventToo) {
+      if (!selection) return false;
+
+      let preserveTime = false;
+      if (selection === 'both') {
         try {
           await apiService.deleteEvent(linkedEventId);
         } catch (err) {
           console.error(`Error deleting linked event ${linkedEventId}:`, err);
+          throw err;
         }
       } else {
         try {
-          await apiService.unlinkTodoFromEvent(todoId, linkedEventId);
+          await apiService.unlinkTodoFromEvent(todoId, linkedEventId, { keepEvent: true });
         } catch (err) {
           console.error(`Error unlinking event ${linkedEventId}:`, err);
+          throw err;
         }
+        preserveTime = true;
       }
+
+      await apiService.deleteTodo(todoId, { preserveTime });
+      return true;
     }
+
+    const confirmDelete = await confirmAction({
+      title: 'Delete todo?',
+      message: 'This action cannot be undone.',
+      confirmLabel: 'Delete',
+      tone: 'danger'
+    });
+
+    if (!confirmDelete) return false;
 
     await apiService.deleteTodo(todoId);
     return true;
@@ -71,40 +81,42 @@ export const deleteEventWithConfirmation = async (eventId, event, apiService) =>
     // Check if event has linked todos
     const linkedTodoId = event.linkedTodoId ?? (event.linkedTodoIds && event.linkedTodoIds[0]);
     const hasLinkedTodo = Boolean(linkedTodoId);
-    const confirmDelete = await confirmAction({
-      title: 'Delete event?',
-      message: hasLinkedTodo
-        ? 'This event is linked to a todo. You can delete only the event or remove the linked todo as well.'
-        : 'This action cannot be undone.',
-      confirmLabel: hasLinkedTodo ? 'Delete Event' : 'Delete',
-      tone: 'danger'
-    });
-
-    if (!confirmDelete) return false;
-
     if (hasLinkedTodo && linkedTodoId) {
-      const deleteTodoToo = await confirmAction({
+      const selection = await confirmAction({
         title: 'Linked todo',
-        message: 'Do you also want to delete the linked todo?',
-        confirmLabel: 'Delete todo',
-        cancelLabel: 'Keep todo',
+        message: 'This event is linked to a todo. Choose what you want to remove.',
+        options: [
+          { label: 'Delete Event only', value: 'event-only' },
+          { label: 'Delete both', value: 'both', tone: 'danger' }
+        ],
+        cancelLabel: 'Cancel',
         tone: 'danger'
       });
 
-      if (deleteTodoToo) {
+      if (!selection) return false;
+
+      if (selection === 'both') {
         try {
           await apiService.deleteTodo(linkedTodoId);
         } catch (err) {
           console.error(`Error deleting linked todo ${linkedTodoId}:`, err);
+          throw err;
         }
+        await apiService.deleteEvent(eventId);
       } else {
-        try {
-          await apiService.unlinkTodoFromEvent(linkedTodoId, eventId);
-        } catch (err) {
-          console.error(`Error unlinking todo ${linkedTodoId}:`, err);
-        }
+        await apiService.deleteEvent(eventId, { preserveTime: true });
       }
+      return true;
     }
+
+    const confirmDelete = await confirmAction({
+      title: 'Delete event?',
+      message: 'This action cannot be undone.',
+      confirmLabel: 'Delete',
+      tone: 'danger'
+    });
+
+    if (!confirmDelete) return false;
 
     await apiService.deleteEvent(eventId);
     return true;

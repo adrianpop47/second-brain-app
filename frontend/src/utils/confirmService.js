@@ -5,7 +5,8 @@ export const confirmAction = ({
   message = '',
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
-  tone = 'danger'
+  tone = 'danger',
+  options = null
 } = {}) => {
   const id =
     typeof crypto !== 'undefined' && crypto.randomUUID
@@ -23,7 +24,7 @@ export const confirmAction = ({
     confirmEmitter.addEventListener('confirm-response', responseHandler);
     confirmEmitter.dispatchEvent(
       new CustomEvent('confirm-request', {
-        detail: { id, title, message, confirmLabel, cancelLabel, tone }
+        detail: { id, title, message, confirmLabel, cancelLabel, tone, options }
       })
     );
   });

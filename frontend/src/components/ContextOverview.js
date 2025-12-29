@@ -5,11 +5,13 @@ import AddTodoModal from './AddTodoModal';
 import EditTodoModal from './EditTodoModal';
 import AddTodoToCalendarModal from './AddTodoToCalendarModal';
 import EventModal from './EventModal';
+import PeriodSelector from './PeriodSelector';
 import apiService from '../services/apiService';
 import { isOverdue as isTodoOverdue } from '../utils/todoUtils';
 import { deleteTodoWithConfirmation, deleteEventWithConfirmation } from '../utils/deleteUtils';
 import { showAppAlert } from '../utils/alertService';
 import { confirmAction } from '../utils/confirmService';
+import { getRangeBounds, isWithinRange, formatDateParam } from '../utils/dateRangeUtils';
 
 const OverviewCard = ({ title, icon: Icon, rightSlot = null, children, className = '' }) => (
   <div className={`bg-white rounded-2xl p-5 border border-slate-200 ${className}`}>
@@ -73,6 +75,8 @@ const ContextOverview = ({
   stats,
   recentTransactions,
   loading,
+  dateRange = 'month',
+  onChangeDateRange = () => {},
   onDataUpdate,
   onRequestViewCalendarEvent = () => {},
   onRequestViewLinkedTodo = () => {},
@@ -109,9 +113,16 @@ const ContextOverview = ({
     try {
       setTodosLoading(true);
       const response = await apiService.getContextTodos(context.id);
+      const { start, end } = getRangeBounds(dateRange);
       // Get incomplete todos (not done), sorted by due date
       const activeTodos = response.data
         .filter(todo => todo.status !== 'done')
+        .filter((todo) => {
+          if (!start && !end) return true;
+          if (!todo.dueDate) return false;
+          const dueValue = `${todo.dueDate}T${todo.dueTime || '00:00:00'}`;
+          return isWithinRange(dueValue, start, end);
+        })
         .sort((a, b) => {
           if (!a.dueDate) return 1;
           if (!b.dueDate) return -1;
@@ -129,17 +140,23 @@ const ContextOverview = ({
   const fetchUpcomingEvents = async () => {
     try {
       setEventsLoading(true);
-      const today = new Date();
-      const end = new Date();
-      end.setDate(today.getDate() + 14);
-      const format = (date) => date.toISOString().split('T')[0];
+      const { start, end } = getRangeBounds(dateRange);
+      const now = new Date();
+      const effectiveStart = start ? new Date(Math.max(start.getTime(), now.getTime())) : now;
       const response = await apiService.getContextEvents(
         context.id,
-        format(today),
-        format(end)
+        formatDateParam(effectiveStart),
+        formatDateParam(end)
       );
-      const upcoming = response.data
-        .filter((event) => new Date(event.startDate) >= today)
+      const upcoming = (response.data || [])
+        .filter((event) => {
+          const eventDate = new Date(event.startDate);
+          if (Number.isNaN(eventDate.getTime())) return false;
+          if (eventDate < now) return false;
+          if (start && eventDate < start) return false;
+          if (end && eventDate > end) return false;
+          return true;
+        })
         .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
         .slice(0, 5);
       setUpcomingEvents(upcoming);
@@ -154,7 +171,7 @@ const ContextOverview = ({
     fetchRecentTodos();
     fetchUpcomingEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.id]);
+  }, [context.id, dateRange]);
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -162,7 +179,14 @@ const ContextOverview = ({
         setNotesLoading(true);
         const response = await apiService.getContextNotes(context.id);
         const notes = response.data || [];
-        setRecentNotes(notes.slice(0, 3));
+        const { start, end } = getRangeBounds(dateRange);
+        const filtered = notes.filter((note) => {
+          if (!start && !end) return true;
+          const referenceDate = note.updatedAt || note.modifiedAt || note.createdAt;
+          if (!referenceDate) return false;
+          return isWithinRange(referenceDate, start, end);
+        });
+        setRecentNotes(filtered.slice(0, 3));
       } catch (err) {
         setRecentNotes([]);
       } finally {
@@ -170,7 +194,7 @@ const ContextOverview = ({
       }
     };
     fetchNotes();
-  }, [context.id]);
+  }, [context.id, dateRange]);
 
   useEffect(() => {
     if (!openNoteMenuId) {
@@ -476,6 +500,11 @@ const ContextOverview = ({
   const fieldType = context.fieldType || 'Revenue';
   const fieldBadgeClass = FIELD_TYPE_BADGE_CLASS;
   const timeMinutes = stats?.time_minutes ?? 0;
+  const totalIncome = stats?.total_income ?? 0;
+  const totalExpenses = stats?.total_expenses ?? 0;
+  const netIncome = totalIncome - totalExpenses;
+  const hourlyRate =
+    timeMinutes > 0 ? (netIncome * 60) / timeMinutes : null;
 
   return (
     <div className="space-y-4 px-3 sm:px-4 md:px-6">
@@ -486,6 +515,7 @@ const ContextOverview = ({
             <h1 className="text-2xl font-semibold text-slate-900">{context.name}</h1>
             <span className={fieldBadgeClass}>{fieldType}</span>
           </div>
+          <PeriodSelector value={dateRange} onChange={onChangeDateRange} compact />
         </div>
         <p className="text-sm text-slate-500 mt-1">
           Summarizes this field’s finances, todos, notes, and calendar so you know what’s happening now.
@@ -542,7 +572,9 @@ const ContextOverview = ({
             </div>
             <span className="text-xs font-medium text-slate-600">Hourly Rate</span>
           </div>
-          <p className="text-2xl font-semibold text-slate-800">--</p>
+          <p className="text-2xl font-semibold text-slate-800">
+            {hourlyRate !== null ? `$${hourlyRate.toFixed(2)}` : '--'}
+          </p>
         </div>
       </div>
 

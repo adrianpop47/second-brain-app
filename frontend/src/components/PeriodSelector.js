@@ -2,11 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { CalendarRange, ChevronDown } from 'lucide-react';
 
 const PERIOD_OPTIONS = [
-  { value: 'day', label: 'Day' },
-  { value: 'week', label: '7 Days' },
-  { value: 'month', label: 'Month' },
-  { value: 'year', label: 'Year' },
-  { value: 'all', label: 'All' }
+  { value: 'day', label: 'Today' },
+  { value: 'week', label: 'This Week' },
+  { value: 'month', label: 'This Month' },
+  { value: 'year', label: 'This Year' },
+  { value: 'all', label: 'All Time' }
 ];
 
 const PeriodSelector = ({ value, onChange, compact = false }) => {

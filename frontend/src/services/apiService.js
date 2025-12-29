@@ -55,8 +55,8 @@ class ApiService {
     });
   }
 
-  async getContextOverview(contextId) {
-    return this.request(`/contexts/${contextId}/overview`);
+  async getContextOverview(contextId, dateRange = 'all') {
+    return this.request(`/contexts/${contextId}/overview?range=${dateRange}`);
   }
 
   async getContextTransactions(contextId, dateRange = 'all') {
@@ -139,8 +139,9 @@ class ApiService {
     });
   }
 
-  async deleteTodo(todoId) {
-    return this.request(`/todos/${todoId}`, {
+  async deleteTodo(todoId, { preserveTime = false } = {}) {
+    const query = preserveTime ? '?preserveTime=true' : '';
+    return this.request(`/todos/${todoId}${query}`, {
       method: 'DELETE',
     });
   }
@@ -159,8 +160,9 @@ class ApiService {
     });
   }
 
-  async unlinkTodoFromEvent(todoId, eventId) {
-    return this.request(`/todos/${todoId}/events/${eventId}/unlink`, {
+  async unlinkTodoFromEvent(todoId, eventId, { keepEvent = false } = {}) {
+    const query = keepEvent ? '?keepEvent=true' : '';
+    return this.request(`/todos/${todoId}/events/${eventId}/unlink${query}`, {
       method: 'DELETE',
     });
   }
@@ -207,8 +209,9 @@ class ApiService {
   }
 
   // Delete event
-  async deleteEvent(eventId) {
-    return this.request(`/events/${eventId}`, {
+  async deleteEvent(eventId, { preserveTime = false } = {}) {
+    const query = preserveTime ? '?preserveTime=true' : '';
+    return this.request(`/events/${eventId}${query}`, {
       method: 'DELETE',
     });
   }
